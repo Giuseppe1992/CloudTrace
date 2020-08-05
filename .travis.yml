@@ -30,7 +30,7 @@ script:
   - tox
 
 after_success:
-  - codecov -t f9aadfe0-4412-42d2-9f39-28025e4f63a7
+  - codecov --token=f9aadfe0-4412-42d2-9f39-28025e4f63a7
 
 
 notifications:
