@@ -30,8 +30,7 @@ script:
   - tox
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash)
-  - codecov
+  - codecov -t f9aadfe0-4412-42d2-9f39-28025e4f63a7
 
 
 notifications:
