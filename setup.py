@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='CloudMeasurement',
     version='1.0',
-    packages=[''],
+    packages=["CloudMeasurement"],
     url='https://github.com/Giuseppe1992/CloudMeasurement.git',
     license='MIT',
     author='Giuseppe Di Lena',
