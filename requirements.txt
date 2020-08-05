@@ -2,6 +2,7 @@ appdirs==1.4.4
 attrs==19.3.0
 boto3==1.14.35
 botocore==1.17.35
+coverage==5.2.1
 distlib==0.3.1
 docutils==0.15.2
 filelock==3.0.12

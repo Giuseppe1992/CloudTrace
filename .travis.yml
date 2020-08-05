@@ -16,7 +16,6 @@ branches:
 
 before_install:
   - sudo apt-get update -qq
-  - export CODECOV_TOKEN="f9aadfe0-4412-42d2-9f39-28025e4f63a7"
 
 cache: pip
 
