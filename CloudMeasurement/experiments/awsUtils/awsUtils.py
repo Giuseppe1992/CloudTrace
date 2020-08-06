@@ -39,13 +39,12 @@ class AWSUtils(object):
         return self.all_az
 
     @staticmethod
-    def create_vpc(vpc_name, region='eu-central-1', cidr_block='10.0.0.0/16',  **kwargs):
+    def create_vpc(vpc_name, region='eu-central-1', cidr_block='10.0.0.0/16', **kwargs):
         ec2_resource = boto3.resource('ec2', region_name=region)
         vpc = ec2_resource.create_vpc(CidrBlock=cidr_block, **kwargs)
         vpc.create_tags(Tags=[{"Key": "Name", "Value": vpc_name}])
         vpc.wait_until_available()
         return vpc
-
 
     @staticmethod
     def modifyEnableDnsSupport(vpc_id, region, value=True):
@@ -127,7 +126,6 @@ class AWSUtils(object):
 
         return hosts_id
 
-
     @staticmethod
     def wait_instances_running(region, instances_id_list):
         """
@@ -137,7 +135,6 @@ class AWSUtils(object):
         """
         ec2_client = boto3.client('ec2', region_name=region)
         ec2_client.get_waiter('instance_running').wait(Filters=[{'Name': "instance-id", "Values": instances_id_list}])
-
 
     @staticmethod
     def create_security_group(region, vpc_id, security_group_name, description="", **kwargs):
@@ -154,7 +151,6 @@ class AWSUtils(object):
         sg = ec2_client.create_security_group(VpcId=vpc_id, GroupName=security_group_name,
                                               Description=description, **kwargs)
         return sg["GroupId"]
-
 
     @staticmethod
     def AuthorizeSecurityGroupTraffic(region, security_group_id, ip_permissions, directions=[]):
@@ -210,7 +206,6 @@ class AWSUtils(object):
         for id_ in instances_id:
             responses.append(ec2_client.modify_instance_attribute(InstanceId=id_, Groups=security_groups, **kwargs))
         return responses
-
 
 
 if __name__ == '__main__':

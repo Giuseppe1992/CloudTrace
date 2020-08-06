@@ -8,5 +8,3 @@ class MultiregionalTrace(object):
         self.list_of_regions = list_of_regions
         self.az_mapping = az_mapping
         self.machine_type_mapping = machine_type_mapping
-
-
