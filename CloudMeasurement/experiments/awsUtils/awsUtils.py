@@ -3,7 +3,6 @@ import uuid
 from time import sleep
 
 
-
 class AWSUtils(object):
     def __init__(self, region="eu-central-1"):
         self.ec2_resource = boto3.resource('ec2', region_name=region)
@@ -35,7 +34,6 @@ class AWSUtils(object):
     def get_route_table_ids_in_the_region(region):
         ec2_resource = boto3.resource('ec2', region_name=region)
         return [rt.id for rt in list(ec2_resource.route_tables.iterator())]
-
 
     @staticmethod
     def get_all_regions(region="eu-central-1"):

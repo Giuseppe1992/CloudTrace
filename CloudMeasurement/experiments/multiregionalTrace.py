@@ -70,7 +70,7 @@ class MultiregionalTrace(object):
                                                             internet_gateway_id=internet_gateway_id)
 
             public_route_table_id = self.cloud_utils.create_route_table(vpc_id=vpc_id, region=region,
-                                                                     table_name=experiment_id)
+                                                                        table_name=experiment_id)
 
             security_group_id = self.cloud_utils.create_security_group(vpc_id=vpc_id, region=region,
                                                                        security_group_name=experiment_id,
@@ -85,6 +85,7 @@ class MultiregionalTrace(object):
             public_subnet = self.cloud_utils.create_subnet(vpc_id=vpc_id, region=region, az=az,
                                                            subnet_name="Public Subnet", cidr_block=cidr_block,
                                                            route_table_id=public_route_table_id)
+
 
 if __name__ == '__main__':
     a = MultiregionalTrace(list_of_regions=["eu-central-1", "eu-west-1", "eu-west-2"],
