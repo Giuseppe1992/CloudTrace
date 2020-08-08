@@ -15,8 +15,8 @@ class MultiregionalTrace(object):
         self.cloud_utils = cloud_util()
         available_regions = self.cloud_utils.get_all_regions()
 
-        if set(list_of_regions) - set(available_regions) != set():
-            raise ValueError("there is a region in the list_of_region parameter that is not valid. \n"
+        if set(list_of_regions) - set(available_regions):
+            raise ValueError("there is a region in the list_of_region that is not valid. \n"
                              "Valid regions: {}".format(available_regions))
 
         if len(set(list_of_regions)) < len(list_of_regions):
