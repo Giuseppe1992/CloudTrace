@@ -1,4 +1,5 @@
 from CloudMeasurement.experiments.awsUtils import AWSUtils
+import ipaddress
 
 DEFAULT_MACHINE_TYPE = "t3.small"
 IP_PERMISSION = [{"IpProtocol": "-1", "FromPort": 1, "ToPort": 65353, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
@@ -59,8 +60,12 @@ class MultiregionalTrace(object):
                     mapping[region] = map_value
         return mapping
 
-    def create_multiregional_environment(self, cidr_block="10.0.0.0/16"):
+    def create_multiregional_vpcs(self, cidr_block="10.0.0.0/16"):
+        # TODO: check that it is possible to create the new vpc in all the regions
+        subnetwork_pool_generator = ipaddress.ip_network(cidr_block).subnets(new_prefix=24)
         experiment_id = self.cloud_utils.generate_experiment_id()
+        vpcs_data = {region: dict() for region in self.list_of_regions}
+        vpcs_data["cidr_block"] = cidr_block
         for region in self.list_of_regions:
             vpc_id = self.cloud_utils.create_vpc(vpc_name=experiment_id, region=region, cidr_block=cidr_block)
             self.cloud_utils.modify_EnableDnsSupport(vpc_id=vpc_id, region=region, value=True)
@@ -83,11 +88,17 @@ class MultiregionalTrace(object):
                                        gateway_id=internet_gateway_id, destination_cidr_block='0.0.0.0/0')
             az = self.az_mapping[region]
             public_subnet = self.cloud_utils.create_subnet(vpc_id=vpc_id, region=region, az=az,
-                                                           subnet_name="Public Subnet", cidr_block=cidr_block,
+                                                           subnet_name="Public Subnet",
+                                                           cidr_block=str(next(subnetwork_pool_generator)),
                                                            route_table_id=public_route_table_id)
+            self.cloud_utils.modify_MapPublicIpOnLaunch(subnet_id=public_subnet, region=region, value=True)
+            vpcs_data[region] = {"vpc_id": vpc_id, "internet_gateway_id": internet_gateway_id,
+                                 "public_route_table_id": public_route_table_id, "security_group_id": security_group_id,
+                                 "availability_zone": az, "public_subnet": public_subnet}
+        return vpcs_data
+
 
 
 if __name__ == '__main__':
-    a = MultiregionalTrace(list_of_regions=["eu-central-1", "eu-west-1", "eu-west-2"],
-                           az_mapping={"eu-west-1": "eu-west-1b"})
-    a.create_multiregional_environment()
+    a = MultiregionalTrace(list_of_regions=["eu-central-1"])
+    a.create_multiregional_vpcs()

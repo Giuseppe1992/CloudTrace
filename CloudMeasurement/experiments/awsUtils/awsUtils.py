@@ -31,6 +31,16 @@ class AWSUtils(object):
                                                                                   route_table_ids))
 
     @staticmethod
+    def check_if_subnet_id_exists_in_region(subnet_id, region):
+        AWSUtils.check_if_region_exists(region=region)
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        list_of_subnets = ec2_resource.subnets.all()
+        subnets_ids = [subnet.id for subnet in list_of_subnets]
+        if subnet_id not in subnets_ids:
+            raise ValueError("The Subnet id that you specified '{}' does not exists in region {},"
+                             "possible Subnet in the region are: {}".format(subnet_id, region, subnets_ids))
+
+    @staticmethod
     def get_route_table_ids_in_the_region(region):
         ec2_resource = boto3.resource('ec2', region_name=region)
         return [rt.id for rt in list(ec2_resource.route_tables.iterator())]
@@ -105,6 +115,22 @@ class AWSUtils(object):
         AWSUtils.check_if_region_exists(region=region)
         ec2_client = boto3.client('ec2', region_name=region)
         ec2_client.modify_vpc_attribute(VpcId=vpc_id, EnableDnsHostnames={"Value": value})
+
+    @staticmethod
+    def modify_MapPublicIpOnLaunch(subnet_id, region, value=True):
+        """
+        Modify the parameter EnableDnsHostnames in a given VPC with the new Value
+        :param subnet_id: subnet_id where to modify EnableDnsHostnames
+        :param region: region
+        :param value: new value of MapPublicIpOnLaunch
+        :return: None
+        """
+        AWSUtils.check_if_subnet_id_exists_in_region(subnet_id=subnet_id, region=region)
+        ec2_client = boto3.client('ec2', region_name=region)
+        response = ec2_client.modify_subnet_attribute(MapPublicIpOnLaunch={'Value': value, }, SubnetId=subnet_id, )
+        status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+        if status_code != 200:
+            raise ValueError("The request returned a wrong HTTPStatusCode: {}".format(status_code))
 
     @staticmethod
     def create_subnet(vpc_id, region, az, subnet_name, cidr_block, route_table_id, **kwargs):
