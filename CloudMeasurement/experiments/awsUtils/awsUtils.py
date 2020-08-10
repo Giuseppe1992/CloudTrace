@@ -156,7 +156,7 @@ class AWSUtils(object):
         subnet = ec2_resource.create_subnet(CidrBlock=cidr_block, VpcId=vpc_id, AvailabilityZone=az, **kwargs)
         subnet.create_tags(Tags=[{"Key": "Name", "Value": subnet_name}])
         route_table.associate_with_subnet(SubnetId=subnet.id)
-        return subnet
+        return subnet.id
 
     @staticmethod
     def create_internet_gateway(region, **kwargs):
@@ -230,7 +230,7 @@ class AWSUtils(object):
         vpc_obj.attach_internet_gateway(InternetGatewayId=internet_gateway_id, **kwargs)
 
     @staticmethod
-    def runInstances(region, subnet_id, instance_type, key_name, image_id, number_of_instances=1, **kwargs):
+    def run_instances(region, subnet_id, instance_type, key_name, image_id, number_of_instances=1, **kwargs):
         """
         Run multiple instances in the specified SubnetId, using the specified KeyName pair and The specified Id
         :param region:
@@ -343,6 +343,195 @@ class AWSUtils(object):
     @staticmethod
     def generate_experiment_id():
         return str(uuid.uuid4()).split("-")[0].upper()
+
+    @staticmethod
+    def check_if_it_is_possible_to_create_a_new_vpc_in_the_region(region, vpc_needed=1):
+        default_max_vpcs = 5
+        ec2_client = boto3.client('ec2', region_name=region)
+        usedVpc = len(ec2_client.describe_vpcs()["Vpcs"])
+        if usedVpc + vpc_needed > default_max_vpcs:
+            raise PermissionError(f"You dont have enough free Vpcs in {region}: Required={vpc_needed},"
+                                  f" used={usedVpc}, limit={default_max_vpcs}")
+
+    @staticmethod
+    def check_if_maximum_it_possible_to_run_instances_in_the_region(region, instances_needed=1):
+        default_total_max_instances = 20
+        ec2_client = boto3.client('ec2', region_name=region)
+        used_instances = {}
+        for reservation in ec2_client.describe_instances()["Reservations"]:
+            instances = reservation["Instances"]
+            for instance in instances:
+                instance_type = instance['InstanceType']
+                if instance["State"]["Name"] == "running":
+                    if instance_type in used_instances.keys():
+                        used_instances[instance_type] += 1
+                    else:
+                        used_instances[instance_type] = 1
+
+        if sum(used_instances.values()) + instances_needed > default_total_max_instances:
+            raise PermissionError(f"You dont have enough free instances: Required={instances_needed},"
+                                  f" used={sum(used_instances)}, limit={default_total_max_instances}")
+
+    @staticmethod
+    def get_image_AMI_from_region(region, image_name):
+        """
+        Return the imageId (ami-xxxxxxxx) for a given ImageName and a given region. Note that an imageId is different
+        for the same image in a different region.
+        :param region: regione name ex. eu-central-1 or us-west-1 etc.
+        :param image_name: image Name provided by in the amazon description,
+                ex. ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-20190722.1 for Ubuntu bionic
+        :return:  string containing the ImageId
+        """
+        ec2_client = boto3.client('ec2', region_name=region)
+        images_response_with_filter = ec2_client.describe_images(ExecutableUsers=["all"],
+                                                                 Filters=[{"Name": "name", "Values": [image_name]}])
+
+        Images = images_response_with_filter["Images"]
+        if len(Images) == 0:
+            raise RuntimeError(f"Image with Name: {image_name} not found in region:{region}")
+        image_description = Images[0]
+        image_id = image_description["ImageId"]
+        return image_id
+
+    @staticmethod
+    def get_instance_private_ip(region, instance_id):
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        instance = ec2_resource.Instance(id=instance_id)
+        return instance.private_ip_address
+
+    @staticmethod
+    def get_instance_public_ip(region, instance_id):
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        instance = ec2_resource.Instance(id=instance_id)
+        return instance.public_ip_address
+
+    @staticmethod
+    def remove_vpc(region, vpc_id):
+        """
+        Remove the vpc using boto3.resource('ec2')
+        :param region: region where the vpc is located
+        :param vpc_id: Id of the Vpc
+        :return: client response
+        Script adapted from https://gist.github.com/vernhart/c6a0fc94c0aeaebe84e5cd6f3dede4ce
+        TODO: Make it cleaner and more modular, seems to work now, but the code is terrible
+        """
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        ec2 = ec2_resource
+        vpc = ec2.Vpc(vpc_id)
+        ec2client = ec2.meta.client
+
+        # detach default dhcp_options if associated with the vpc
+        dhcp_options_default = ec2.DhcpOptions('default')
+        if dhcp_options_default:
+            dhcp_options_default.associate_with_vpc(
+                VpcId=vpc.id
+            )
+
+        # delete any instances
+        public_ips = []
+        for subnet in vpc.subnets.all():
+            for instance in subnet.instances.all():
+                if instance.public_ip_address:
+                    public_ips.append(instance.public_ip_address)
+                instance.terminate()
+
+        # delete nat_gateways
+        nat_gateways = ec2client.describe_nat_gateways(Filters=[{"Name": "vpc-id", "Values": [vpc.id]}])["NatGateways"]
+        nat_ids = [nat['NatGatewayId']for nat in nat_gateways]
+
+        for nat in nat_gateways:
+            for address in nat["NatGatewayAddresses"]:
+                if "PublicIp" in address.keys():
+                    public_ips.append(address["PublicIp"])
+
+        for nat in nat_ids:
+            ec2client.delete_nat_gateway(NatGatewayId=nat)
+
+        # wait that all the nat gateways are in deleted state
+            nat_gateways = ec2client.describe_nat_gateways(Filters=[{"Name": "vpc-id", "Values": [vpc.id]}])[
+                "NatGateways"]
+            if nat_gateways == []:
+                break
+            status = tuple(set([nat["State"] for nat in nat_gateways]))
+            if status == ("deleted",):
+                break
+
+            sleep(1)
+
+        # wait that all the instances are deleted
+
+        subnets = vpc.subnets.all()
+        i = 0
+        for subnet in subnets:
+            i += len(list(subnet.instances.all()))
+
+        completed_hosts = 0
+        while True:
+            subnets = vpc.subnets.all()
+            instances = []
+            for subnet in subnets:
+                instances += subnet.instances.all()
+                if i-len(instances) != completed_hosts:
+                    completed_hosts = i-len(instances)
+            if not instances:
+                break
+            sleep(1)
+
+        # detach and delete all gateways associated with the vpc
+        for gw in vpc.internet_gateways.all():
+            # We need to remove the public address before removing the Internet GW
+            vpc.detach_internet_gateway(InternetGatewayId=gw.id)
+            gw.delete()
+        # delete all route table associations
+        route_tables = ec2client.describe_route_tables(Filters=[{"Name": "vpc-id", "Values": [vpc.id]}])["RouteTables"]
+        for rt in route_tables:
+            associations = rt['Associations']
+            if associations == []:
+                ec2client.delete_route_table(RouteTableId=rt['RouteTableId'])
+                continue
+
+            for association in associations:
+                if not association["Main"]:
+                    association_id = association['RouteTableAssociationId']
+                    ec2client.disassociate_route_table(AssociationId=association_id)
+            sleep(1)
+            if (False,) == tuple(set([association["Main"] for association in associations])):
+                ec2client.delete_route_table(RouteTableId=rt["RouteTableId"])
+
+        # delete our endpoints
+        for ep in ec2client.describe_vpc_endpoints(
+                Filters=[{
+                    'Name': 'vpc-id',
+                    'Values': [vpc.id]
+                }])['VpcEndpoints']:
+            ec2client.delete_vpc_endpoints(VpcEndpointIds=[ep['VpcEndpointId']])
+        # delete our security groups
+        for sg in vpc.security_groups.all():
+            if sg.group_name != 'default':
+                sg.delete()
+        # delete any vpc peering connections
+        for vpcpeer in ec2client.describe_vpc_peering_connections(
+                Filters=[{
+                    'Name': 'requester-vpc-info.vpc-id',
+                    'Values': [vpc.id]
+                }])['VpcPeeringConnections']:
+            ec2.VpcPeeringConnection(vpcpeer['VpcPeeringConnectionId']).delete()
+        # delete non-default network acls
+        for netacl in vpc.network_acls.all():
+            if not netacl.is_default:
+                netacl.delete()
+        # delete network interfaces
+        for subnet in vpc.subnets.all():
+            for interface in subnet.network_interfaces.all():
+                interface.delete()
+            subnet.delete()
+        # finally, delete the vpc
+
+        return ec2client.delete_vpc(VpcId=vpc.id)
+
+    def finalize(self, data):
+        # TODO: pass the experiment in the db
+        pass
 
 
 if __name__ == '__main__':
