@@ -8,7 +8,8 @@ IMAGE_NAME = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-20190722.1"
 REMOTE_USER = "ubuntu"
 
 class MultiregionalTrace(object):
-    def __init__(self, list_of_regions, az_mapping=None, machine_type_mapping=None, cloud_util=AWSUtils):
+    def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None,
+                 machine_type_mapping=None, cloud_util=AWSUtils):
         """
         :param list_of_regions: list of regions
         :param az_mapping: dict
