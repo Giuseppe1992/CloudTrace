@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 
 from setuptools import setup,find_packages
-from os.path import join
+from os import mkdir
+from pathlib import Path
 
 import sys
 sys.path.append('.')
 
-cli = join('bin', 'cm')
+home = Path.home()
+
+cli = Path('bin/cm')
 setup(
     name='CloudMeasurement',
     version='1.0',
@@ -17,7 +20,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'awscli'],
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False
 )

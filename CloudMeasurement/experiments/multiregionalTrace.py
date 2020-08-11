@@ -75,6 +75,7 @@ class MultiregionalTrace(object):
         experiment_id = self.cloud_utils.generate_experiment_id()
         vpcs_data = {region: dict() for region in self.list_of_regions}
         vpcs_data["cidr_block"] = cidr_block
+        vpcs_data["experiment_id"] = experiment_id
         for region in self.list_of_regions:
             vpc_id = self.cloud_utils.create_vpc(vpc_name=experiment_id, region=region, cidr_block=cidr_block)
             self.cloud_utils.modify_EnableDnsSupport(vpc_id=vpc_id, region=region, value=True)
@@ -131,12 +132,13 @@ class MultiregionalTrace(object):
 
         print(self.vpcs_data)
 
-    def clean_experiment(self):
+    @staticmethod
+    def clean_experiment(dict_region_vpc, cloud_utils=AWSUtils):
         proc = []
-        for region in self.list_of_regions:
+        for region in dict_region_vpc.keys():
             # enable parallel removal
-            vpc_id = self.vpcs_data[region]["vpc_id"]
-            p = Process(target=self.cloud_utils.remove_vpc, args=(region, vpc_id))
+            vpc_id = dict_region_vpc[region]
+            p = Process(target=cloud_utils.remove_vpc, args=(region, vpc_id))
             p.start()
             proc.append(p)
 

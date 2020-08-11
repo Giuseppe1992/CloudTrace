@@ -12,3 +12,6 @@ class InventoryConfiguration(object):
 
     def add_host(self, host_id, region, public_ip):
         pass
+
+    def purge(self):
+        pass
