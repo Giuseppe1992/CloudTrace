@@ -24,7 +24,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=['setuptools', 'awscli', 'ansible'],
+    install_requires=['setuptools', 'awscli'],
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False
 )
