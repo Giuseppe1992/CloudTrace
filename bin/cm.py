@@ -11,6 +11,7 @@ from json import load
 from os import system
 from optparse import OptionParser
 from pathlib import Path
+import termtables as tt
 
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
 from CloudMeasurement.liteSQLdb import CloudMeasurementDB
@@ -22,10 +23,15 @@ from CloudMeasurement.experiments.awsUtils.awsUtils import AWSUtils
 EXPERIMENTS = {"multiregionalTrace": MultiregionalTrace}
 CLOUDUTILS = {"aws": AWSUtils }
 
+home = Path.home()
+UTILS_PATH = home / ".CloudMeasurement"
+ANSIBLE_PATH = UTILS_PATH / "ansible"
+DB_PATH = UTILS_PATH / "CloudMeasurementDB.db"
+PRIVATE_KEY_PATH = home / ".ssh" / "id_rsa"
 
 class CloudMeasurementRunner(object):
     def __init__(self):
-        "Init."
+        """Init."""
         self.options = None
         self.args = None  # May be used someday for more CLI scripts
         self.validate = None
@@ -47,6 +53,8 @@ class CloudMeasurementRunner(object):
                         help="possible experiments: \n" + "|".join(EXPERIMENTS.keys()))
 
         opts.add_option('--init', action='store_true', default=None, help='initialize the environment')
+
+        opts.add_option('--configuration', action='store_true', default=None, help='initialize the environment')
 
         opts.add_option('--purge', action='store_true', default=None, help='purge all the active experiments')
 
@@ -76,6 +84,9 @@ class CloudMeasurementRunner(object):
             opts.print_help()
             exit()
 
+    def save_experiment(self, experiment_data):
+        pass
+
     def begin( self ):
         """Run the CLI"""
         opts = self.options
@@ -91,14 +102,26 @@ class CloudMeasurementRunner(object):
         if len(list(filter(lambda x: x is not None and x is not False, dict_opts.values()))) > 1:
             raise ValueError("you have to pass just one of this options: {}".format(dict_opts.values()))
 
-        print(dict_opts)
-        print(opts)
-
         if opts.init:
             # TODO: initialize the environment
             system("aws configure")
-            # CloudMeasurementDB.purge()
-            # InventoryConfiguration.purge()
+
+            private_key_path = str(input("Insert the default private key [default: {}] : ".format(PRIVATE_KEY_PATH)) or str(PRIVATE_KEY_PATH))
+            if not Path(private_key_path).is_file():
+                raise ValueError('{} is not a valid file'.format(private_key_path))
+
+            CloudMeasurementDB.purge(db_path=DB_PATH)
+
+            CloudMeasurementDB.add_configuration(db_path=DB_PATH, utils_path=UTILS_PATH,
+                                                 private_key_path=private_key_path)
+            exit(0)
+
+        if opts.configuration:
+            # TODO: purge all the experiment
+            row = CloudMeasurementDB.get_configuration(db_path=DB_PATH)[0]
+            table = tt.to_string([row], header=['DB_PATH', 'UTILS_PATH', 'PRIVATE_KEY_PATH'],
+                                 style=tt.styles.ascii_thin_double)
+            print(table)
             exit(0)
 
         if opts.purge:
@@ -131,11 +154,9 @@ class CloudMeasurementRunner(object):
             experiment_data = experiment.create_multiregional_vpcs()
 
             print(experiment_data)
-            # CloudMeasurementDB.save(experiment_data)
+            self.save_experiment(experiment_data)
             exit(0)
             experiment.create_instances(key_pair=opts.key_id)
-
-
 
         if opts.retrieve_data:
             # TODO: retrieve data from the instances
@@ -147,7 +168,7 @@ class CloudMeasurementRunner(object):
             create_experiment = "multiregionalTrace" # From DB
             experiments_class = EXPERIMENTS[create_experiment]
             dict_region_vpc = {"eu-central-1": "vpc-01e07dc48feecda0c", "eu-west-2": "vpc-0b5fff0059f4eb176"} # From DB
-            experiments_class.clean_experiment(dict_region_vpc=dict_region_vpc, cloud_utils=CLOUDUTILS[cloud_util])
+            experiments_class.purge_experiment(dict_region_vpc=dict_region_vpc, cloud_utils=CLOUDUTILS[cloud_util])
             exit(0)
 
 def convert_json_to_dict(json_path):

@@ -66,6 +66,8 @@ class MultiregionalTrace(object):
         return mapping
 
     def create_multiregional_vpcs(self, cidr_block="10.0.0.0/16"):
+        if self.vpcs_data is not None:
+            raise PermissionError("the Multiregional vpc is already created: {}".format(self.vpcs_data))
         for region in self.list_of_regions:
             # check if the resource are available in all the regions before starting the experiment
             self.cloud_utils.check_if_it_is_possible_to_create_a_new_vpc_in_the_region(region=region, vpc_needed=1)
@@ -132,8 +134,20 @@ class MultiregionalTrace(object):
 
         print(self.vpcs_data)
 
+    def purge(self):
+        proc = []
+        for region in self.list_of_regions:
+            # enable parallel removal
+            vpc_id = self.vpcs_data[region]["vpc_id"]
+            p = Process(target=self.cloud_utils.remove_vpc, args=(region, vpc_id))
+            p.start()
+            proc.append(p)
+
+        for p in proc:
+            p.join()
+
     @staticmethod
-    def clean_experiment(dict_region_vpc, cloud_utils=AWSUtils):
+    def purge_experiment(dict_region_vpc, cloud_utils=AWSUtils):
         proc = []
         for region in dict_region_vpc.keys():
             # enable parallel removal
@@ -150,4 +164,4 @@ if __name__ == '__main__':
     a = MultiregionalTrace(list_of_regions=["eu-central-1"])
     a.create_multiregional_vpcs()
     a.create_instances(key_pair="id_rsa")
-    a.clean_experiment()
+    a.purge()
