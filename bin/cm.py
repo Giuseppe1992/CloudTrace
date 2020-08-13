@@ -60,13 +60,11 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--purge', action='store_true', default=None, help='purge all the active experiments')
 
-        opts.add_option('--experiments_list', '-l', action='store_true', default=None, help='list the experiments')
+        opts.add_option('--experiments_list', '-e', action='store_true', default=None, help='list the experiments')
 
         opts.add_option('--regions_list', '-r', action='store_true', default=None, help='list the regions')
 
         opts.add_option('--instances_list', '-i', action='store_true', default=None, help='list the instances')
-
-        opts.add_option('--start_experiment', '-s', type='string', default=None, help='start experiment')
 
         opts.add_option('--delete_experiment', '-d', type='string', default=None, help='delete experiment')
 
@@ -156,16 +154,21 @@ class CloudMeasurementRunner(object):
                           "STARTING_DATE", "ENDING_DATE", "STATUS", "ANSIBLE_FILE", "CIDR_BLOCK"]
 
             rows = CloudMeasurementDB.get_experiments(db_path=DB_PATH)
-            table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
-            print(table)
+            if len(rows) == 0:
+                print("NO EXPERIMENTS CREATED")
+            else:
+                table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
+                print(table)
             exit(0)
 
         if opts.regions_list:
             headers_up = ["EXPERIMENT_ID", "REGION", "VPC_ID", "STATUS"]
-
             rows = CloudMeasurementDB.get_regions(db_path=DB_PATH)
-            table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
-            print(table)
+            if len(rows) == 0:
+                print("NO REGIONS CREATED")
+            else:
+                table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
+                print(table)
             exit(0)
 
         if opts.instances_list:
@@ -219,15 +222,26 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.delete_experiment:
-            # TODO: delete experiment
-            cloud_util = "aws" # From the DB
-            create_experiment = "multiregionalTrace" # From DB
+            experiment_id = opts.delete_experiment
+            row = CloudMeasurementDB.get_experiment(experiment_id, db_path=DB_PATH,)
+            if row is None:
+                raise ValueError("{} does not exists".format(opts.delete_experiment))
+
+            cloud_util = row[1]
+            create_experiment = row[2]
             experiments_class = EXPERIMENTS[create_experiment]
-            dict_region_vpc = {"eu-central-1": "vpc-01e07dc48feecda0c", "eu-west-2": "vpc-0b5fff0059f4eb176"} # From DB
+            dict_region_vpc = CloudMeasurementDB.get_regions_dict(experiment_id,db_path=DB_PATH)
+            if dict_region_vpc is None:
+                raise ValueError("No region assigned for experiment {}".format(opts.delete_experiment))
+
+            print("* DELETING THE EXPERIMENT {} - Please DO NOT close this terminal before it is completed"
+                  ", you may have inconsistent data otherwise".format(experiment_id))
             experiments_class.purge_experiment(dict_region_vpc=dict_region_vpc, cloud_utils=CLOUDUTILS[cloud_util])
+            CloudMeasurementDB.delete_experiment(experiment_id, db_path=DB_PATH)
             exit(0)
 
-        print("No operation passed")
+        print("No operation")
+        exit(0)
 
     @staticmethod
     def save_experiment(**kwargs):
