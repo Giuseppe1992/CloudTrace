@@ -129,9 +129,39 @@ class CloudMeasurementDB(object):
         c.close()
 
     @staticmethod
+    def get_experiment(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT * FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        return rows[0]
+
+    @staticmethod
+    def get_regions_dict(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT * FROM REGIONS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        regions_vpc_dict = {r[1]: r[2]for r in rows}
+        return regions_vpc_dict
+
+    @staticmethod
     def stop_experiment(self):
         pass
 
     @staticmethod
-    def delete_experiment(self):
-        pass
+    def delete_experiment(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''DELETE FROM INSTANCES WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        c.execute('''DELETE FROM REGIONS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        c.execute('''DELETE FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        regions_vpc_dict = {r[1]: r[2] for r in rows}
+        return regions_vpc_dict
