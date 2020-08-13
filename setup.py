@@ -21,7 +21,7 @@ system("sudo chmod -R 777 {}".format(cm_path))
 cli = Path('bin/cm')
 setup(
     name='CloudMeasurement',
-    version='1.0-alpha',
+    version='1.0-a0',
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/Giuseppe1992/CloudMeasurement.git',
@@ -35,8 +35,8 @@ setup(
     python_requires='>=3.6',
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OSX :: Ubuntu 16.04 :: Ubuntu 18.04 :: Ubuntu 20.04",
+        "License :: MIT License",
+        "Operating System :: OSX :: Ubuntu 18.04 :: Ubuntu 20.04",
     ],
 
 )
