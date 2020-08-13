@@ -160,8 +160,5 @@ class CloudMeasurementDB(object):
         c.execute('''DELETE FROM INSTANCES WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
         c.execute('''DELETE FROM REGIONS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
         c.execute('''DELETE FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
-        rows = c.fetchall()
-        if not rows:
-            return None
-        regions_vpc_dict = {r[1]: r[2] for r in rows}
-        return regions_vpc_dict
+        conn.commit()
+        c.close()

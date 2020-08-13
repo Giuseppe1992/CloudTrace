@@ -230,14 +230,14 @@ class CloudMeasurementRunner(object):
             cloud_util = row[1]
             create_experiment = row[2]
             experiments_class = EXPERIMENTS[create_experiment]
-            dict_region_vpc = CloudMeasurementDB.get_regions_dict(experiment_id,db_path=DB_PATH)
+            dict_region_vpc = CloudMeasurementDB.get_regions_dict(experiment_id=experiment_id, db_path=DB_PATH)
             if dict_region_vpc is None:
                 raise ValueError("No region assigned for experiment {}".format(opts.delete_experiment))
 
             print("* DELETING THE EXPERIMENT {} - Please DO NOT close this terminal before it is completed"
                   ", you may have inconsistent data otherwise".format(experiment_id))
             experiments_class.purge_experiment(dict_region_vpc=dict_region_vpc, cloud_utils=CLOUDUTILS[cloud_util])
-            CloudMeasurementDB.delete_experiment(experiment_id, db_path=DB_PATH)
+            CloudMeasurementDB.delete_experiment(experiment_id=experiment_id, db_path=DB_PATH)
             exit(0)
 
         print("No operation")
