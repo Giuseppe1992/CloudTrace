@@ -13,11 +13,13 @@ from optparse import OptionParser
 from pathlib import Path
 import termtables as tt
 
+
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
 from CloudMeasurement.liteSQLdb import CloudMeasurementDB
 from CloudMeasurement.experiments.ansibleConfiguration import InventoryConfiguration
 from CloudMeasurement.experiments.awsUtils.awsUtils import AWSUtils
-
+from sqlite3 import OperationalError
+from datetime import datetime
 
 
 EXPERIMENTS = {"multiregionalTrace": MultiregionalTrace}
@@ -60,7 +62,11 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--experiments_list', '-l', action='store_true', default=None, help='list the experiments')
 
+        opts.add_option('--regions_list', '-r', action='store_true', default=None, help='list the regions')
+
         opts.add_option('--instances_list', '-i', action='store_true', default=None, help='list the instances')
+
+        opts.add_option('--start_experiment', '-s', type='string', default=None, help='start experiment')
 
         opts.add_option('--delete_experiment', '-d', type='string', default=None, help='delete experiment')
 
@@ -75,7 +81,10 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--cloud_util', type='string', default="aws", help='retrieve data')
 
-        opts.add_option('--key_id', type='string', default="id_rsa", help='public key id')
+        opts.add_option('--key_pair_id', type='string', default="id_rsa", help='public key id')
+
+        opts.add_option('--verbose', '-v', default=None, action='store_true', help='Shows more details')
+
 
         self.options, self.args = opts.parse_args()
 
@@ -83,9 +92,6 @@ class CloudMeasurementRunner(object):
         if self.args:
             opts.print_help()
             exit()
-
-    def save_experiment(self, experiment_data):
-        pass
 
     def begin( self ):
         """Run the CLI"""
@@ -97,31 +103,46 @@ class CloudMeasurementRunner(object):
         dict_opts.pop("cloud_util")
         dict_opts.pop("az_mapping")
         dict_opts.pop("machine_type_mapping")
-        dict_opts.pop("key_id")
+        dict_opts.pop("key_pair_id")
+        dict_opts.pop("verbose")
 
         if len(list(filter(lambda x: x is not None and x is not False, dict_opts.values()))) > 1:
             raise ValueError("you have to pass just one of this options: {}".format(dict_opts.values()))
 
         if opts.init:
-            # TODO: initialize the environment
             system("aws configure")
 
-            private_key_path = str(input("Insert the default private key [default: {}] : ".format(PRIVATE_KEY_PATH)) or str(PRIVATE_KEY_PATH))
+            private_key_path = str(input("Insert the default private key [default: {}] : "
+                                         "".format(PRIVATE_KEY_PATH)) or str(PRIVATE_KEY_PATH))
             if not Path(private_key_path).is_file():
                 raise ValueError('{} is not a valid file'.format(private_key_path))
 
-            CloudMeasurementDB.purge(db_path=DB_PATH)
+            try:
+                CloudMeasurementDB.purge(db_path=DB_PATH)
+            except OperationalError:
+                print("ERROR:",
+                      "Make sure that the directory {} exists and it has the correct permissions".format(UTILS_PATH))
+                exit(1)
 
             CloudMeasurementDB.add_configuration(db_path=DB_PATH, utils_path=UTILS_PATH,
                                                  private_key_path=private_key_path)
             exit(0)
 
         if opts.configuration:
-            # TODO: purge all the experiment
-            row = CloudMeasurementDB.get_configuration(db_path=DB_PATH)[0]
-            table = tt.to_string([row], header=['DB_PATH', 'UTILS_PATH', 'PRIVATE_KEY_PATH'],
-                                 style=tt.styles.ascii_thin_double)
-            print(table)
+            try:
+                rows = CloudMeasurementDB.get_configuration(db_path=DB_PATH)
+            except OperationalError:
+                print("Configuration not found, make sure to run 'cm --init' before starting your experiments ")
+                exit(1)
+
+            if len(rows) == 0:
+                print("Configuration not found, make sure to run 'cm --init' before starting your experiments ")
+                exit(1)
+            else:
+                row = rows[0]
+                headers_up = ['DB_PATH', 'UTILS_PATH', 'PRIVATE_KEY_PATH']
+                table = tt.to_string([row], header=headers_up, style=tt.styles.ascii_thin_double)
+                print(table)
             exit(0)
 
         if opts.purge:
@@ -131,18 +152,34 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.experiments_list:
-            # TODO: list all the experiments
-            # CloudMeasurementDB.get_experiments()
+            headers_up = ["EXPERIMENT_ID", "CLOUD", "EXPERIMENT", "PEERED", "NETWORK_OPTIMIZED",
+                          "STARTING_DATE", "ENDING_DATE", "STATUS", "ANSIBLE_FILE", "CIDR_BLOCK"]
 
+            rows = CloudMeasurementDB.get_experiments(db_path=DB_PATH)
+            table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
+            print(table)
+            exit(0)
+
+        if opts.regions_list:
+            headers_up = ["EXPERIMENT_ID", "REGION", "VPC_ID", "STATUS"]
+
+            rows = CloudMeasurementDB.get_regions(db_path=DB_PATH)
+            table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
+            print(table)
             exit(0)
 
         if opts.instances_list:
-            # TODO: list all the experiments
-            # CloudMeasurementDB.get_instances()
+            headers_up = ["INSTANCE_ID", "MACHINE_TYPE", "EXPERIMENT_ID", "REGION", "AVAILABILITY_ZONE",
+                          "VPC_ID", "STATUS", "PUBLIC_IP", "PRIVATE_IP", "KEYPAIR_ID"]
+            rows = CloudMeasurementDB.get_instances(db_path=DB_PATH)
+            if len(rows) == 0:
+                print("NO INSTANCES CREATED")
+            else:
+                table = tt.to_string(rows, header=headers_up, style=tt.styles.ascii_thin_double)
+                print(table)
             exit(0)
 
         if opts.create_experiment:
-            # TODO: create new experiment
             list_of_regions = opts.list_of_regions
             list_of_regions = list_of_regions.split(",")
             experiments_class = EXPERIMENTS[opts.create_experiment]
@@ -151,12 +188,31 @@ class CloudMeasurementRunner(object):
             experiment = experiments_class(list_of_regions=list_of_regions, az_mapping=az_mapping,
                                            machine_type_mapping=machine_type_mapping,
                                            cloud_util=CLOUDUTILS[opts.cloud_util])
+
+            print("* CREATING THE VPCS IN {}".format(list_of_regions))
             experiment_data = experiment.create_multiregional_vpcs()
 
             print(experiment_data)
-            self.save_experiment(experiment_data)
+
+            experiment_id = experiment_data["experiment_id"]
+            ansible_file = str(ANSIBLE_PATH / (experiment_id + ".yml"))
+            cidr_block = experiment_data["cidr_block"]
+            starting_date = str(datetime.now())
+            self.save_experiment(db_path=DB_PATH, experiment_id=experiment_id, cloud_util=opts.cloud_util,
+                                 experiment_type=opts.create_experiment, peered=0, network_optimized=0,
+                                 starting_date=starting_date, ending_date="None", status="VPCS CONFIGURED", ansible_file=ansible_file,
+                                 cidr_block=cidr_block)
+
+            self.save_regions(db_path=DB_PATH, experiment_data=experiment_data)
+
+            print("* CREATING THE INSTANCES".format(list_of_regions))
+            experiment_data = experiment.create_instances(key_pair_id=opts.key_pair_id)
+            self.save_instances(db_path=DB_PATH, experiment_data=experiment_data)
             exit(0)
-            experiment.create_instances(key_pair=opts.key_id)
+
+        # if opts.start_experiment:
+        #    experiment.create_instances(key_pair=opts.key_id)
+        #    self.save_instances(experiment_data=experiment_data)
 
         if opts.retrieve_data:
             # TODO: retrieve data from the instances
@@ -171,6 +227,51 @@ class CloudMeasurementRunner(object):
             experiments_class.purge_experiment(dict_region_vpc=dict_region_vpc, cloud_utils=CLOUDUTILS[cloud_util])
             exit(0)
 
+        print("No operation passed")
+
+    @staticmethod
+    def save_experiment(**kwargs):
+        headers_dict = {"EXPERIMENT_ID": "experiment_id", "CLOUD": "cloud_util", "EXPERIMENT": "experiment_type",
+                        "PEERED": "peered", "NETWORK_OPTIMIZED": "network_optimized", "STARTING_DATE": "starting_date",
+                        "ENDING_DATE": "ending_date", "STATUS": "status", "ANSIBLE_FILE": "ansible_file",
+                        "CIDR_BLOCK": "cidr_block"}
+        CloudMeasurementDB.add_experiment(**kwargs)
+
+    @staticmethod
+    def save_regions(db_path, experiment_data):
+        list_of_regions = list(experiment_data.keys())
+        list_of_regions.remove("cidr_block")
+        list_of_regions.remove("experiment_id")
+
+        experiment_id = experiment_data["experiment_id"]
+
+        for region in list_of_regions:
+            vpc_id = experiment_data[region]["vpc_id"]
+            status = "VPC UP"
+            CloudMeasurementDB.add_region(db_path=db_path, experiment_id=experiment_id, region=region,
+                                          vpc_id=vpc_id, status=status)
+
+    def save_instances(self, db_path, experiment_data):
+        list_of_regions = list(experiment_data.keys())
+        list_of_regions.remove("cidr_block")
+        list_of_regions.remove("experiment_id")
+        experiment_id = experiment_data["experiment_id"]
+
+        for region in list_of_regions:
+            instance_id = experiment_data[region]["instance_id"]
+            machine_type = experiment_data[region]["machine_type"]
+            public_address = experiment_data[region]["public_address"]
+            private_address = experiment_data[region]["private_address"]
+            availability_zone = experiment_data[region]["availability_zone"]
+            vpc_id = experiment_data[region]["vpc_id"]
+            status = "RUNNING"
+            key_pair_id = experiment_data[region]["key_pair_id"]
+            CloudMeasurementDB.add_instance(db_path=db_path, instance_id=instance_id, machine_type=machine_type,
+                                            experiment_id=experiment_id, region=region,
+                                            availability_zone=availability_zone, vpc_id=vpc_id, status=status,
+                                            public_address=public_address, private_address=private_address,
+                                            key_pair_id=key_pair_id)
+
 def convert_json_to_dict(json_path):
     if json_path is None:
         return None
@@ -182,27 +283,11 @@ def convert_json_to_dict(json_path):
 def cleanup():
     pass
 
-
-
 def main():
     try:
         CloudMeasurementRunner()
     except KeyboardInterrupt:
         print("\n\nKeyboard Interrupt. Shutting down and cleaning up...\n\n")
-        cleanup()
-    except Exception:
-        # Print exception
-        type_, val_, trace_ = sys.exc_info()
-        error_msg = ("-" * 80 + "\n" +
-                    "Caught exception. Cleaning up...\n\n" +
-                    "%s: %s\n" % (type_.__name__, val_) +
-                    "-" * 80 + "\n")
-        print(error_msg)
-        # Print stack trace to debug log
-        import traceback
-
-        stack_trace = traceback.format_exc()
-        print(stack_trace + "\n")
         cleanup()
 
 

@@ -112,14 +112,14 @@ class MultiregionalTrace(object):
         self.vpcs_data = vpcs_data
         return vpcs_data
 
-    def create_instances(self, key_pair="id_rsa"):
+    def create_instances(self, key_pair_id="id_rsa"):
         # TODO check that key_pair exists in all the regions
         for region in self.list_of_regions:
             public_subnet_id = self.vpcs_data[region]["public_subnet"]
             image_ami = self.cloud_utils.get_image_AMI_from_region(region=region, image_name=IMAGE_NAME)
             regional_instances_ids = self.cloud_utils.run_instances(region=region, subnet_id=public_subnet_id,
                                                                     instance_type=self.machine_type_mapping[region],
-                                                                    key_name=key_pair, image_id=image_ami,
+                                                                    key_name=key_pair_id, image_id=image_ami,
                                                                     number_of_instances=1)
             self.vpcs_data[region]["instance_id"] = regional_instances_ids[0]
 
@@ -131,8 +131,12 @@ class MultiregionalTrace(object):
             self.vpcs_data[region]["private_address"] = self.cloud_utils.get_instance_private_ip(region=region,
                                                                                                  instance_id=instance_id
                                                                                                  )
+            self.vpcs_data[region]["availability_zone"] = self.az_mapping[region]
+            self.vpcs_data[region]["machine_type"] = self.machine_type_mapping[region]
+            self.vpcs_data[region]["key_pair_id"] = key_pair_id
 
         print(self.vpcs_data)
+        return self.vpcs_data
 
     def purge(self):
         proc = []
