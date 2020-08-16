@@ -2,9 +2,9 @@ ansible==2.10.0a8
 ansible-runner==1.4.6
 appdirs==1.4.4
 attrs==19.3.0
-boto3==1.14.39
-boto3-stubs==1.14.39.0
-botocore==1.17.39
+boto3==1.14.43
+boto3-stubs==1.14.43.0
+botocore==1.17.43
 certifi==2020.6.20
 chardet==3.0.4
 codecov==2.1.8
@@ -19,7 +19,7 @@ iniconfig==1.0.1
 ipaddress==1.0.23
 jmespath==0.10.0
 more-itertools==8.4.0
-mypy-boto3==1.14.39.0
+mypy-boto3==1.14.43.0
 packaging==20.4
 pluggy==0.13.1
 py==1.9.0

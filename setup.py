@@ -28,11 +28,13 @@ system("sudo chmod -R 777 {}".format(ansible_path))
 cli = Path('bin/cm')
 setup(
     name='CloudMeasurement',
-    version='1.0-a0',
+    version='1.0.1',
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/Giuseppe1992/CloudMeasurement.git',
     license='MIT',
+    long_description="TODO",
+    long_description_content_type="text/plain",
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
@@ -41,9 +43,13 @@ setup(
     zip_safe=False,
     python_requires='>=3.6',
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: MIT License",
-        "Operating System :: OSX :: Ubuntu 18.04 :: Ubuntu 20.04",
+        "Programming Language :: Python :: 3 :: Only",
+        "License :: OSI Approved :: MIT License",
+        "Development Status :: 3 - Alpha",
+        "Operating System :: MacOS :: MacOS X",
+        "Operating System :: POSIX :: Linux",
+        "Topic :: Software Development :: Libraries :: Application Frameworks"
+
     ],
 
 )
