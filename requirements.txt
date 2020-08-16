@@ -7,7 +7,6 @@ boto3==1.14.43
 boto3-stubs==1.14.43.0
 certifi==2020.6.20
 chardet==3.0.4
-CloudMeasurement==1.0.3
 codecov==2.1.8
 coverage==5.2.1
 distlib==0.3.1
