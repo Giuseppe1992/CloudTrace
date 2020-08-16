@@ -24,6 +24,7 @@ finally:
 
 
 cli = Path('bin/cm')
+requirements = [req.strip() for req in open("requirements.txt", "r").readlines()]
 setup(
     name='CloudMeasurement',
     version='1.0.3',
@@ -36,7 +37,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=['setuptools'],
+    install_requires=requirements,
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False,
     python_requires='>=3.6',
