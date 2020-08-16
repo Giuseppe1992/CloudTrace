@@ -15,6 +15,9 @@ cm_path = home / ".CloudMeasurement"
 cm_path.mkdir(exist_ok=True, mode=0x777)
 
 # Bad trick to avoid the umask value
+# This will not work with docker :-(
+# TODO: Find way to grant the access to directory without sudo
+
 print("I need your sudo password to put the permission in the ~/.CloudMeasurement directory")
 system("sudo chmod -R 777 {}".format(cm_path))
 
@@ -38,7 +41,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=['setuptools', 'awscli==1.18.116'],
+    install_requires=['setuptools'],
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False,
     python_requires='>=3.6',
