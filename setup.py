@@ -3,7 +3,7 @@
 from setuptools import setup,find_packages
 from os import mkdir
 from pathlib import Path
-from os import system
+from os import system, makedirs, umask
 
 import sys
 sys.path.append('.')
@@ -11,21 +11,16 @@ sys.path.append('.')
 home = Path.home()
 
 # Configure CloudMeasurementDirectory
-cm_path = home / ".CloudMeasurement"
-cm_path.mkdir(exist_ok=True, mode=0x777)
+try:
+    oringinal_mask = umask(0)
+    print(oringinal_mask)
+    cm_path = home / ".CloudMeasurement"
+    ansible_path = cm_path / "ansible"
+    makedirs(cm_path, exist_ok=True, mode=0o777)
+    makedirs(ansible_path, exist_ok=True, mode=0o777)
 
-# Bad trick to avoid the umask value
-# This will not work with docker :-(
-# TODO: Find way to grant the access to directory without sudo
-
-print("I need your sudo password to put the permission in the ~/.CloudMeasurement directory")
-system("sudo chmod -R 777 {}".format(cm_path))
-
-ansible_path = cm_path / "ansible"
-ansible_path.mkdir(exist_ok=True, mode=0x777)
-
-print("I need your sudo password to put the permission in the ~/.CloudMeasurement/ansible directory")
-system("sudo chmod -R 777 {}".format(ansible_path))
+finally:
+    umask(oringinal_mask)
 
 
 cli = Path('bin/cm')
