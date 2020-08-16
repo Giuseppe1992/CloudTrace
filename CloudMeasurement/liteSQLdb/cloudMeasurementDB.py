@@ -180,5 +180,3 @@ class CloudMeasurementDB(object):
         if not rows:
             return None
         return rows[0][0]
-
-

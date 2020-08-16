@@ -2,7 +2,6 @@ from pathlib import Path, PosixPath
 import ansible_runner
 
 
-
 class InventoryConfiguration(object):
     def __init__(self, inventory_path):
         if not (type(inventory_path) is Path or type(inventory_path) is PosixPath):
@@ -37,33 +36,11 @@ class InventoryConfiguration(object):
                         ansible_password = "ansible_password={}".format(password)
                         inventory.write("{} {} {} {}\n".format(public_ip, ansible_user, ansible_password, comment))
 
-
-# import ansible_runner
-# r = ansible_runner.run(private_data_dir='/tmp/demo', host_pattern='localhost', module='shell', module_args='whoami')
-# print("{}: {}".format(r.status, r.rc))
-# # successful: 0
-# for each_host_event in r.events:
-#     print(each_host_event['event'])
-# print("Final status:")
-# print(r.stats)
-
-# import ansible_runner
-# r = ansible_runner.run(private_data_dir='/tmp/demo', playbook='test.yml')
-# print("{}: {}".format(r.status, r.rc))
-# # successful: 0
-# for each_host_event in r.events:
-#     print(each_host_event['event'])
-# print("Final status:")
-# print(r.stats)
-
-
-
     @staticmethod
     def run_inventory(inventory_path, host_pattern, module, module_args, forks=10, cmdline="--become"):
         r = ansible_runner.run(host_pattern=host_pattern, module=module, module_args=module_args,
-                               inventory=inventory_path, forks=forks,cmdline=cmdline)
+                               inventory=inventory_path, forks=forks, cmdline=cmdline)
         return r.stats
-
 
 
 if __name__ == '__main__':
@@ -73,6 +50,3 @@ if __name__ == '__main__':
     a.add_host("cccc", "rrrr", "ip2", "ubuntu1", "pass1")
     a.add_host("dddd", "r2", "ip3", "ubuntu1", "pass1")
     a.make_inventory()
-
-
-

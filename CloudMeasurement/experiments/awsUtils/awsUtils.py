@@ -406,11 +406,12 @@ class AWSUtils(object):
         return instance.public_ip_address
 
     @staticmethod
-    def modify_security_group(region,instance_ids, groups, **kwargs):
+    def modify_security_group(region, instance_ids, groups, **kwargs):
         """
         Change the Security Groups Assigned to an instance
-        :param instancesId: Instance where to modify the Security Groups
-        :param Groups: List of Security groups Ids to set in the instance
+        :param instance_ids: to modify the Security Groups
+        :param region: region where to modify the Security Groups
+        :param groups: List of Security groups Ids to set in the instance
         :param kwargs: Optional parameters that you can assign to the boto3.client("ec2").modify_instance_attribute
         method, you can find the correct documentation at:
         https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.modify_instance_attribute

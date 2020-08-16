@@ -123,7 +123,6 @@ class MultiregionalTrace(object):
                                                                     number_of_instances=1)
             self.vpcs_data[region]["instance_id"] = regional_instances_ids[0]
 
-
         for region in self.list_of_regions:
             instance_id = self.vpcs_data[region]["instance_id"]
             security_group = self.vpcs_data[region]["security_group_id"]
@@ -138,8 +137,6 @@ class MultiregionalTrace(object):
             self.vpcs_data[region]["machine_type"] = self.machine_type_mapping[region]
             self.vpcs_data[region]["key_pair_id"] = key_pair_id
 
-
-        print(self.vpcs_data)
         return self.vpcs_data
 
     def purge(self):
