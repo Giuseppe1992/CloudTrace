@@ -11,9 +11,8 @@ sys.path.append('.')
 home = Path.home()
 
 # Configure CloudMeasurementDirectory
+oringinal_mask = umask(0)
 try:
-    oringinal_mask = umask(0)
-    print(oringinal_mask)
     cm_path = home / ".CloudMeasurement"
     ansible_path = cm_path / "ansible"
     makedirs(cm_path, exist_ok=True, mode=0o777)
@@ -24,7 +23,8 @@ finally:
 
 
 cli = Path('bin/cm')
-requirements = [req.strip() for req in open("requirements.txt", "r").readlines()]
+req_path = Path("requirements.txt").absolute()
+requirements = [req.strip() for req in open(req_path, "r").readlines()]
 setup(
     name='CloudMeasurement',
     version='1.0.3',
