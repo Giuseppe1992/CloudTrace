@@ -28,7 +28,7 @@ system("sudo chmod -R 777 {}".format(ansible_path))
 cli = Path('bin/cm')
 setup(
     name='CloudMeasurement',
-    version='1.0.1',
+    version='1.0.3',
     packages=find_packages(),
     include_package_data=True,
     url='https://github.com/Giuseppe1992/CloudMeasurement.git',
@@ -38,7 +38,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=['setuptools', 'awscli'],
+    install_requires=['setuptools', 'awscli==1.18.116'],
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False,
     python_requires='>=3.6',
