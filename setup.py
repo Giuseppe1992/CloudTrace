@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
 from setuptools import setup,find_packages
-from os import mkdir
 from pathlib import Path
-from os import system, makedirs, umask
+from os import makedirs, umask
 
 import sys
 sys.path.append('.')
@@ -23,8 +22,8 @@ finally:
 
 
 cli = Path('bin/cm')
-req_path = Path("requirements.txt").absolute()
-requirements = [req.strip() for req in open(req_path, "r").readlines()]
+req_path = Path(__file__).parent / "requirements.txt"
+#requirements = [req.strip() for req in open(req_path, "r").readlines()]
 setup(
     name='CloudMeasurement',
     version='1.0.3',
@@ -37,7 +36,7 @@ setup(
     author='Giuseppe Di Lena',
     author_email='giuseppedilena92@gmail.com',
     description='Cloud Measurement tool',
-    install_requires=requirements,
+    install_requires=[],
     entry_points={"console_scripts": ["cm = bin.cm:main"]},
     zip_safe=False,
     python_requires='>=3.6',
