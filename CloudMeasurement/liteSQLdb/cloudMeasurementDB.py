@@ -63,6 +63,14 @@ class CloudMeasurementDB(object):
         return rows
 
     @staticmethod
+    def get_instances_experiment(db_path, experiment_id):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT * FROM INSTANCES WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        return rows
+
+    @staticmethod
     def get_regions(db_path):
         conn = sqlite3.connect(str(db_path))
         c = conn.cursor()
@@ -162,3 +170,15 @@ class CloudMeasurementDB(object):
         c.execute('''DELETE FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
         conn.commit()
         c.close()
+
+    @staticmethod
+    def get_ansible_file(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT ANSIBLE_FILE FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        return rows[0][0]
+
+

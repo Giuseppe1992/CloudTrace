@@ -123,9 +123,12 @@ class MultiregionalTrace(object):
                                                                     number_of_instances=1)
             self.vpcs_data[region]["instance_id"] = regional_instances_ids[0]
 
+
         for region in self.list_of_regions:
             instance_id = self.vpcs_data[region]["instance_id"]
+            security_group = self.vpcs_data[region]["security_group_id"]
             self.cloud_utils.wait_instances_running(region=region, instances_id_list=[instance_id])
+            self.cloud_utils.modify_security_group(region=region, instance_ids=[instance_id], groups=[security_group])
             self.vpcs_data[region]["public_address"] = self.cloud_utils.get_instance_public_ip(region=region,
                                                                                                instance_id=instance_id)
             self.vpcs_data[region]["private_address"] = self.cloud_utils.get_instance_private_ip(region=region,
@@ -134,6 +137,7 @@ class MultiregionalTrace(object):
             self.vpcs_data[region]["availability_zone"] = self.az_mapping[region]
             self.vpcs_data[region]["machine_type"] = self.machine_type_mapping[region]
             self.vpcs_data[region]["key_pair_id"] = key_pair_id
+
 
         print(self.vpcs_data)
         return self.vpcs_data

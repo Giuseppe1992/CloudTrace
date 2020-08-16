@@ -1,17 +1,78 @@
-from pathlib import Path
+from pathlib import Path, PosixPath
+import ansible_runner
+
+
 
 class InventoryConfiguration(object):
-    def __init__(self, experiment_id, dir_path):
-        if type(experiment_id) is not str:
-            raise TypeError(f"type of experiment_id is not str, got type {type(experiment_id)}")
-        self.experiment_id = experiment_id
-        self.dir_path = Path(dir_path)
-        self.file_path = self.dir_path / (experiment_id + ".yml")
-        if self.file_path.is_file():
-            raise FileExistsError(f"file {self.file_path} already exists")
+    def __init__(self, inventory_path):
+        if not (type(inventory_path) is Path or type(inventory_path) is PosixPath):
+            raise TypeError("inventory_path should be Path or PosixPath type, got: {}".format(type(inventory_path)))
 
-    def add_host(self, host_id, region, public_ip):
-        pass
+        with open(inventory_path, "w") as inventory:
+            inventory.write("# ANSIBLE YML FILE FOR CLOUD MEASUREMENT EXPERIMENT \n")
 
-    def purge(self):
-        pass
+        self.path = inventory_path
+        self.items = dict()
+
+    def add_host(self, host_id, region, public_ip, user="ubuntu", password=None):
+        if region not in self.items.keys():
+            self.items[region] = [(host_id, public_ip, user, password)]
+        else:
+            self.items[region].append((host_id, public_ip, user, password))
+
+    def make_inventory(self):
+        if self.items is dict():
+            raise ValueError("the inventory is empty")
+
+        with open(self.path, "a+") as inventory:
+            for region in self.items.keys():
+                inventory.write("\n[{}]\n".format(region.replace("-", "_")))
+                for item in self.items[region]:
+                    host_id, public_ip, user, password = item
+                    comment = "# host_id={}".format(host_id)
+                    ansible_user = "ansible_user={}".format(user)
+                    if password is None:
+                        inventory.write("{} {} {}\n".format(public_ip, ansible_user, comment))
+                    else:
+                        ansible_password = "ansible_password={}".format(password)
+                        inventory.write("{} {} {} {}\n".format(public_ip, ansible_user, ansible_password, comment))
+
+
+# import ansible_runner
+# r = ansible_runner.run(private_data_dir='/tmp/demo', host_pattern='localhost', module='shell', module_args='whoami')
+# print("{}: {}".format(r.status, r.rc))
+# # successful: 0
+# for each_host_event in r.events:
+#     print(each_host_event['event'])
+# print("Final status:")
+# print(r.stats)
+
+# import ansible_runner
+# r = ansible_runner.run(private_data_dir='/tmp/demo', playbook='test.yml')
+# print("{}: {}".format(r.status, r.rc))
+# # successful: 0
+# for each_host_event in r.events:
+#     print(each_host_event['event'])
+# print("Final status:")
+# print(r.stats)
+
+
+
+    @staticmethod
+    def run_inventory(inventory_path, host_pattern, module, module_args, forks=10, cmdline="--become"):
+        r = ansible_runner.run(host_pattern=host_pattern, module=module, module_args=module_args,
+                               inventory=inventory_path, forks=forks,cmdline=cmdline)
+        return r.stats
+
+
+
+if __name__ == '__main__':
+    a = InventoryConfiguration(Path("/Users/giuseppe/desktop/test.yml"))
+    a.add_host("aaaa", "rrrr", "ip", "ubuntu", "pass")
+    a.add_host("bbbb", "rrrr", "ip1", "ubuntu", "pass")
+    a.add_host("cccc", "rrrr", "ip2", "ubuntu1", "pass1")
+    a.add_host("dddd", "r2", "ip3", "ubuntu1", "pass1")
+    a.make_inventory()
+
+
+

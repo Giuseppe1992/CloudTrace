@@ -13,7 +13,6 @@ from optparse import OptionParser
 from pathlib import Path
 import termtables as tt
 
-
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
 from CloudMeasurement.liteSQLdb import CloudMeasurementDB
 from CloudMeasurement.experiments.ansibleConfiguration import InventoryConfiguration
@@ -51,7 +50,7 @@ class CloudMeasurementRunner(object):
                   '(type %prog -h for details)' )
 
         opts = OptionParser(description=desc, usage=usage )
-        opts.add_option('--create_experiment', type='string', default=None,
+        opts.add_option('--create_experiment', '-c', type='string', default=None,
                         help="possible experiments: \n" + "|".join(EXPERIMENTS.keys()))
 
         opts.add_option('--init', action='store_true', default=None, help='initialize the environment')
@@ -60,17 +59,19 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--purge', action='store_true', default=None, help='purge all the active experiments')
 
-        opts.add_option('--experiments_list', '-e', action='store_true', default=None, help='list the experiments')
+        opts.add_option('--ls_experiments', '-e', action='store_true', default=None, help='list the experiments')
 
-        opts.add_option('--regions_list', '-r', action='store_true', default=None, help='list the regions')
+        opts.add_option('--ls_regions', '-r', action='store_true', default=None, help='list the regions')
 
-        opts.add_option('--instances_list', '-i', action='store_true', default=None, help='list the instances')
+        opts.add_option('--ls_instances', '-i', action='store_true', default=None, help='list the instances')
+
+        opts.add_option('--start_experiment', '-s', type='string', default=None, help='start experiment')
 
         opts.add_option('--delete_experiment', '-d', type='string', default=None, help='delete experiment')
 
         opts.add_option('--retrieve_data', type='string', default=None, help='retrieve data')
 
-        opts.add_option('--list_of_regions', type='string', default="eu-central-1", help='list of region to use')
+        opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
 
         opts.add_option('--az_mapping', type='string', default=None, help='optional Json, describing the az_mapping')
 
@@ -82,7 +83,6 @@ class CloudMeasurementRunner(object):
         opts.add_option('--key_pair_id', type='string', default="id_rsa", help='public key id')
 
         opts.add_option('--verbose', '-v', default=None, action='store_true', help='Shows more details')
-
 
         self.options, self.args = opts.parse_args()
 
@@ -97,7 +97,7 @@ class CloudMeasurementRunner(object):
 
         # dict_opts without the optional values
         dict_opts = dict(vars(opts))
-        dict_opts.pop("list_of_regions")
+        dict_opts.pop("regions")
         dict_opts.pop("cloud_util")
         dict_opts.pop("az_mapping")
         dict_opts.pop("machine_type_mapping")
@@ -149,7 +149,7 @@ class CloudMeasurementRunner(object):
             # InventoryConfiguration.purge()
             exit(0)
 
-        if opts.experiments_list:
+        if opts.ls_experiments:
             headers_up = ["EXPERIMENT_ID", "CLOUD", "EXPERIMENT", "PEERED", "NETWORK_OPTIMIZED",
                           "STARTING_DATE", "ENDING_DATE", "STATUS", "ANSIBLE_FILE", "CIDR_BLOCK"]
 
@@ -161,7 +161,7 @@ class CloudMeasurementRunner(object):
                 print(table)
             exit(0)
 
-        if opts.regions_list:
+        if opts.ls_regions:
             headers_up = ["EXPERIMENT_ID", "REGION", "VPC_ID", "STATUS"]
             rows = CloudMeasurementDB.get_regions(db_path=DB_PATH)
             if len(rows) == 0:
@@ -171,7 +171,7 @@ class CloudMeasurementRunner(object):
                 print(table)
             exit(0)
 
-        if opts.instances_list:
+        if opts.ls_instances:
             headers_up = ["INSTANCE_ID", "MACHINE_TYPE", "EXPERIMENT_ID", "REGION", "AVAILABILITY_ZONE",
                           "VPC_ID", "STATUS", "PUBLIC_IP", "PRIVATE_IP", "KEYPAIR_ID"]
             rows = CloudMeasurementDB.get_instances(db_path=DB_PATH)
@@ -183,7 +183,7 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.create_experiment:
-            list_of_regions = opts.list_of_regions
+            list_of_regions = opts.regions
             list_of_regions = list_of_regions.split(",")
             experiments_class = EXPERIMENTS[opts.create_experiment]
             az_mapping = convert_json_to_dict(json_path=opts.az_mapping)
@@ -198,24 +198,38 @@ class CloudMeasurementRunner(object):
             print(experiment_data)
 
             experiment_id = experiment_data["experiment_id"]
-            ansible_file = str(ANSIBLE_PATH / (experiment_id + ".yml"))
+            ansible_file = ANSIBLE_PATH / (experiment_id + ".cfg")
             cidr_block = experiment_data["cidr_block"]
             starting_date = str(datetime.now())
             self.save_experiment(db_path=DB_PATH, experiment_id=experiment_id, cloud_util=opts.cloud_util,
                                  experiment_type=opts.create_experiment, peered=0, network_optimized=0,
-                                 starting_date=starting_date, ending_date="None", status="VPCS CONFIGURED", ansible_file=ansible_file,
-                                 cidr_block=cidr_block)
+                                 starting_date=starting_date, ending_date="None", status="VPCS CONFIGURED",
+                                 ansible_file=str(ansible_file), cidr_block=cidr_block)
 
             self.save_regions(db_path=DB_PATH, experiment_data=experiment_data)
 
             print("* CREATING THE INSTANCES".format(list_of_regions))
             experiment_data = experiment.create_instances(key_pair_id=opts.key_pair_id)
             self.save_instances(db_path=DB_PATH, experiment_data=experiment_data)
+            self.save_inventory(ansible_path=ansible_file, experiment_data=experiment_data)
             exit(0)
 
-        # if opts.start_experiment:
-        #    experiment.create_instances(key_pair=opts.key_id)
-        #    self.save_instances(experiment_data=experiment_data)
+        if opts.start_experiment:
+            experiment_id = opts.start_experiment
+
+            rows = CloudMeasurementDB.get_instances_experiment(db_path=DB_PATH, experiment_id=experiment_id)
+            if len(rows) == 0:
+                print("NO INSTANCES CREATED FOR THE EXPERIMENT {}".format(experiment_id))
+            else:
+                ansible_file = CloudMeasurementDB.get_ansible_file(db_path=DB_PATH, experiment_id=experiment_id)
+                if ansible_file is None:
+                    raise ValueError("Ansible File not configured in the DB")
+                run = InventoryConfiguration.run_inventory(ansible_file,host_pattern="all", module="apt",
+                                                           module_args="update_cache=yes name=traceroute",
+                                                           forks=10, cmdline="--become")
+                print(run)
+
+            exit(0)
 
         if opts.retrieve_data:
             # TODO: retrieve data from the instances
@@ -265,7 +279,8 @@ class CloudMeasurementRunner(object):
             CloudMeasurementDB.add_region(db_path=db_path, experiment_id=experiment_id, region=region,
                                           vpc_id=vpc_id, status=status)
 
-    def save_instances(self, db_path, experiment_data):
+    @staticmethod
+    def save_instances(db_path, experiment_data):
         list_of_regions = list(experiment_data.keys())
         list_of_regions.remove("cidr_block")
         list_of_regions.remove("experiment_id")
@@ -286,6 +301,23 @@ class CloudMeasurementRunner(object):
                                             public_address=public_address, private_address=private_address,
                                             key_pair_id=key_pair_id)
 
+    @staticmethod
+    def save_inventory(ansible_path, experiment_data):
+        inventory_configuration = InventoryConfiguration(inventory_path=ansible_path)
+        list_of_regions = list(experiment_data.keys())
+        list_of_regions.remove("cidr_block")
+        list_of_regions.remove("experiment_id")
+        for region in list_of_regions:
+            instance_id = experiment_data[region]["instance_id"]
+            public_address = experiment_data[region]["public_address"]
+            inventory_configuration.add_host(host_id=instance_id, region=region, public_ip=public_address,
+                                             user="ubuntu", password=None)
+
+        inventory_configuration.make_inventory()
+
+
+
+
 def convert_json_to_dict(json_path):
     if json_path is None:
         return None
@@ -301,8 +333,7 @@ def main():
     try:
         CloudMeasurementRunner()
     except KeyboardInterrupt:
-        print("\n\nKeyboard Interrupt. Shutting down and cleaning up...\n\n")
-        cleanup()
+        print("\n\nKeyboard Interrupt. Shutting down...\n\n")
 
 
 if __name__ == '__main__':

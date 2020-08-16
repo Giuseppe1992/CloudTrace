@@ -406,6 +406,22 @@ class AWSUtils(object):
         return instance.public_ip_address
 
     @staticmethod
+    def modify_security_group(region,instance_ids, groups, **kwargs):
+        """
+        Change the Security Groups Assigned to an instance
+        :param instancesId: Instance where to modify the Security Groups
+        :param Groups: List of Security groups Ids to set in the instance
+        :param kwargs: Optional parameters that you can assign to the boto3.client("ec2").modify_instance_attribute
+        method, you can find the correct documentation at:
+        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2.html#EC2.Client.modify_instance_attribute
+        :return: None
+        """
+        responses = []
+        ec2_client = boto3.client('ec2', region_name=region)
+        for id_ in instance_ids:
+            responses.append(ec2_client.modify_instance_attribute(InstanceId=id_, Groups=groups, **kwargs))
+
+    @staticmethod
     def remove_vpc(region, vpc_id):
         """
         Remove the vpc using boto3.resource('ec2')
@@ -506,6 +522,7 @@ class AWSUtils(object):
                 }])['VpcEndpoints']:
             ec2client.delete_vpc_endpoints(VpcEndpointIds=[ep['VpcEndpointId']])
         # delete our security groups
+        sleep(5)
         for sg in vpc.security_groups.all():
             if sg.group_name != 'default':
                 sg.delete()

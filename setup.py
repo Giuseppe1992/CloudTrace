@@ -18,6 +18,13 @@ cm_path.mkdir(exist_ok=True, mode=0x777)
 print("I need your sudo password to put the permission in the ~/.CloudMeasurement directory")
 system("sudo chmod -R 777 {}".format(cm_path))
 
+ansible_path = cm_path / "ansible"
+ansible_path.mkdir(exist_ok=True, mode=0x777)
+
+print("I need your sudo password to put the permission in the ~/.CloudMeasurement/ansible directory")
+system("sudo chmod -R 777 {}".format(ansible_path))
+
+
 cli = Path('bin/cm')
 setup(
     name='CloudMeasurement',
