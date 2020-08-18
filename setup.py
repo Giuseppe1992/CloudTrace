@@ -14,8 +14,10 @@ oringinal_mask = umask(0)
 try:
     cm_path = home / ".CloudMeasurement"
     ansible_path = cm_path / "ansible"
+    experiments_path = cm_path / "experiments"
     makedirs(cm_path, exist_ok=True, mode=0o777)
     makedirs(ansible_path, exist_ok=True, mode=0o777)
+    makedirs(experiments_path, exist_ok=True, mode=0o777)
 
 finally:
     umask(oringinal_mask)

@@ -8,10 +8,11 @@ author: Giuseppe Di Lena (giuseppedilena92@gmail.com)
 
 import sys
 from json import load
-from os import system
+from os import system, makedirs, umask
 from optparse import OptionParser
 from pathlib import Path
 import termtables as tt
+
 
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
 from CloudMeasurement.liteSQLdb import CloudMeasurementDB
@@ -27,8 +28,14 @@ CLOUDUTILS = {"aws": AWSUtils }
 home = Path.home()
 UTILS_PATH = home / ".CloudMeasurement"
 ANSIBLE_PATH = UTILS_PATH / "ansible"
+EXPERIMENTS_PATH = UTILS_PATH / "experiments"
 DB_PATH = UTILS_PATH / "CloudMeasurementDB.db"
 PRIVATE_KEY_PATH = home / ".ssh" / "id_rsa"
+
+CRONTAB_CFG_PATH = Path("/home/ubuntu/crontab.cfg")
+TRACEROUTE_SCRIPT_PATH = Path("/home/ubuntu/traceroute.sh")
+EXPERIMENT_REMOTE_DIR = Path("/home/ubuntu/experiments/")
+EXPERIMENT_BK_REMOTE_DIR = Path("/home/ubuntu/experiments_bk/")
 
 class CloudMeasurementRunner(object):
     def __init__(self):
@@ -220,19 +227,99 @@ class CloudMeasurementRunner(object):
             rows = CloudMeasurementDB.get_instances_experiment(db_path=DB_PATH, experiment_id=experiment_id)
             if len(rows) == 0:
                 print("NO INSTANCES CREATED FOR THE EXPERIMENT {}".format(experiment_id))
-            else:
-                ansible_file = CloudMeasurementDB.get_ansible_file(db_path=DB_PATH, experiment_id=experiment_id)
-                if ansible_file is None:
-                    raise ValueError("Ansible File not configured in the DB")
-                run = InventoryConfiguration.run_inventory(ansible_file,host_pattern="all", module="apt",
-                                                           module_args="update_cache=yes name=traceroute",
-                                                           forks=10, cmdline="--become")
+                exit(1)
+
+            ansible_file = CloudMeasurementDB.get_ansible_file(db_path=DB_PATH, experiment_id=experiment_id)
+            if ansible_file is None:
+                raise ValueError("Ansible File not configured in the DB")
+
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="apt",
+                                                       module_args="update_cache=yes name=traceroute",
+                                                       forks=10, cmdline="--become")
+            print(run)
+            experiment_class = EXPERIMENTS[CloudMeasurementDB.get_experiment_type(db_path=DB_PATH, experiment_id=experiment_id)]
+
+            data = ["INSTANCE_ID", "MACHINE_TYPE", "REGION", "AVAILABILITY_ZONE", "PUBLIC_IP", "PRIVATE_IP"]
+            instances_data = CloudMeasurementDB.get_instances_data(db_path=DB_PATH, experiment_id=experiment_id,
+                                                                   db_columns=data)
+
+            crontab_path = "/tmp/crontab.cfg"
+            self.make_crontab_file(crontab_path)
+            copy_args = "src={} dest={} mode=777".format(crontab_path, CRONTAB_CFG_PATH)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="copy",
+                                                       module_args=copy_args, forks=10, cmdline="--become")
+            print(run)
+
+            mkdir_args = "mkdir -p {} && mkdir -p {}".format(EXPERIMENT_REMOTE_DIR, EXPERIMENT_BK_REMOTE_DIR)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="raw",
+                                                       module_args=mkdir_args, forks=10, cmdline="--become")
+
+            print(run)
+
+            instances_data_dict = {row[0]: {key.lower(): val for key, val in zip(data, row)} for row in instances_data}
+
+            for instance in instances_data_dict:
+                ip = instances_data_dict[instance]["public_ip"]
+                list_of_destinations = [instances_data_dict[i]["public_ip"] for i in instances_data_dict]
+                list_of_destinations.remove(ip)
+                traceroute_path = "/tmp/traceroute.sh"
+                self.make_traceroute(path=traceroute_path, list_of_destinations=list_of_destinations)
+                copy_args = "src={} dest={} mode=777".format(traceroute_path, TRACEROUTE_SCRIPT_PATH)
+                run = InventoryConfiguration.run_inventory(ansible_file, host_pattern=ip, module="copy",
+                                                           module_args=copy_args, forks=1, cmdline="--become")
                 print(run)
+
+            crontab_cmd = "crontab {}".format(CRONTAB_CFG_PATH)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="raw",
+                                                       module_args=crontab_cmd, forks=10, cmdline="--become")
+            print(run)
 
             exit(0)
 
         if opts.retrieve_data:
-            # TODO: retrieve data from the instances
+            experiment_id = opts.retrieve_data
+            data_path = EXPERIMENTS_PATH / experiment_id
+
+            if CloudMeasurementDB.get_experiment(experiment_id=experiment_id, db_path=DB_PATH) is None:
+                print("Experiment: {} not in the DB".format(experiment_id))
+                exit(1)
+
+            ansible_file = CloudMeasurementDB.get_ansible_file(db_path=DB_PATH, experiment_id=experiment_id)
+            if ansible_file is None:
+                raise ValueError("Ansible File not configured in the DB")
+
+            oringinal_mask = umask(0)
+            try:
+                makedirs(data_path, exist_ok=True, mode=0o777)
+            finally:
+                umask(oringinal_mask)
+
+            zip_path = EXPERIMENT_REMOTE_DIR.parent / "experiment.zip"
+            archive_args = "path={} dest={} format=zip".format(EXPERIMENT_REMOTE_DIR, zip_path)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="archive",
+                                                       module_args=archive_args, forks=10, cmdline="--become")
+            print(run)
+
+            fetch_args = "src={} dest={} mode=666".format(zip_path, data_path)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="fetch",
+                                                       module_args=fetch_args, forks=10, cmdline="--become")
+            print(run)
+            instances_data = CloudMeasurementDB.get_instances_data(db_path=DB_PATH, experiment_id=experiment_id,
+                                                                   db_columns=["PUBLIC_IP"])
+            instances_ips = [d[0] for d in instances_data]
+
+            for ip in instances_ips:
+                copy_args = "src={} dest={} mode=666".format(
+                    EXPERIMENTS_PATH / experiment_id / ip / "home/ubuntu/experiment.zip",
+                    EXPERIMENTS_PATH / experiment_id / ip / "experiment.zip")
+
+                run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="localhost", module="copy",
+                                                           module_args=copy_args, forks=1, cmdline="")
+                print(run)
+                raw_args = "rm -rf {}".format(EXPERIMENTS_PATH / experiment_id / ip / "home")
+                run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="localhost", module="raw",
+                                                           module_args=raw_args, forks=1, cmdline="")
+                print(run)
             exit(0)
 
         if opts.delete_experiment:
@@ -315,8 +402,27 @@ class CloudMeasurementRunner(object):
 
         inventory_configuration.make_inventory()
 
+    @staticmethod
+    def make_traceroute(path, list_of_destinations):
+        tr_string = '''#!/bin/bash \n'''
+        for ip in list_of_destinations:
+            ip_name = "ip_" + ip + "date_"
+            ip_name = ip_name.replace(".", "_")
+            tr_string += 'traceroute -n -p 33434 {} -U -m 60 | tee {}$(date +"%M_%k_%d_%m_%Y").l' \
+                         'og > {}$(date +"%M_%k_%d_%m_%Y").log \n'.format(ip, EXPERIMENT_REMOTE_DIR / ip_name,
+                                                                          EXPERIMENT_BK_REMOTE_DIR / ip_name)
 
+        with open(path, "w") as f:
+            f.write(tr_string)
 
+        return path
+
+    @staticmethod
+    def make_crontab_file(path):
+        ct_string = '''*/1 * * * * {}\n\n'''.format(TRACEROUTE_SCRIPT_PATH)
+        with open(path, "w") as f:
+            f.write(ct_string)
+        return path
 
 def convert_json_to_dict(json_path):
     if json_path is None:
@@ -324,7 +430,6 @@ def convert_json_to_dict(json_path):
     with open(Path(json_path), "r") as json_file:
         dictionary = eval(load(json_file))
     return dictionary
-
 
 def cleanup():
     pass

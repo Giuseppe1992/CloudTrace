@@ -180,3 +180,23 @@ class CloudMeasurementDB(object):
         if not rows:
             return None
         return rows[0][0]
+
+    @staticmethod
+    def get_experiment_type(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT EXPERIMENT FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        return rows[0][0]
+
+    @staticmethod
+    def get_instances_data(experiment_id, db_path, db_columns):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT {} FROM INSTANCES WHERE EXPERIMENT_ID='{}' '''.format(",".join(db_columns), experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        return rows

@@ -1,11 +1,13 @@
 from CloudMeasurement.experiments.awsUtils import AWSUtils
 from multiprocessing import Process
+
 import ipaddress
 
 DEFAULT_MACHINE_TYPE = "t3.small"
 IP_PERMISSION = [{"IpProtocol": "-1", "FromPort": 1, "ToPort": 65353, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]}]
 IMAGE_NAME = "ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-20190722.1"
 REMOTE_USER = "ubuntu"
+
 
 class MultiregionalTrace(object):
     def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None,
@@ -67,7 +69,7 @@ class MultiregionalTrace(object):
 
     def create_multiregional_vpcs(self, cidr_block="10.0.0.0/16"):
         if self.vpcs_data is not None:
-            raise PermissionError("the Multiregional vpc is already created: {}".format(self.vpcs_data))
+            raise PermissionError("the experiment vpc is already created: {}".format(self.vpcs_data))
         for region in self.list_of_regions:
             # check if the resource are available in all the regions before starting the experiment
             self.cloud_utils.check_if_it_is_possible_to_create_a_new_vpc_in_the_region(region=region, vpc_needed=1)
