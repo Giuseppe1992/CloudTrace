@@ -2,7 +2,6 @@ jobs:
   include:
     - os: linux
       dist: bionic
-    - os: osx
 
 language: python
 python:
@@ -16,8 +15,7 @@ branches:
     - master
 
 before_install:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; sudo apt-get update -qq          ; fi
-  - if [ "$TRAVIS_OS_NAME" = "osx" ]; brew install awscli          ; fi
+  - sudo apt-get update -qq
 
 cache: pip
 
