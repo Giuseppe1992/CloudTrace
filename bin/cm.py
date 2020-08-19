@@ -7,8 +7,8 @@ author: Giuseppe Di Lena (giuseppedilena92@gmail.com)
 """
 
 import sys
-from json import load
-from os import system, makedirs, umask
+from json import load, dump
+from os import system, makedirs, umask, getcwd
 from optparse import OptionParser
 from pathlib import Path
 import termtables as tt
@@ -77,6 +77,8 @@ class CloudMeasurementRunner(object):
         opts.add_option('--delete_experiment', '-d', type='string', default=None, help='delete experiment')
 
         opts.add_option('--retrieve_data', type='string', default=None, help='retrieve data')
+
+        opts.add_option('--save_data', type='string', default=None, help='save data, EXP_ID,[PATH]')
 
         opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
 
@@ -158,7 +160,7 @@ class CloudMeasurementRunner(object):
 
         if opts.ls_experiments:
             headers_up = ["EXPERIMENT_ID", "CLOUD", "EXPERIMENT", "PEERED", "NETWORK_OPTIMIZED",
-                          "STARTING_DATE", "ENDING_DATE", "STATUS", "ANSIBLE_FILE", "CIDR_BLOCK"]
+                          "CREATION_DATE", "STARTING_DATE", "STATUS", "ANSIBLE_FILE", "CIDR_BLOCK"]
 
             rows = CloudMeasurementDB.get_experiments(db_path=DB_PATH)
             if len(rows) == 0:
@@ -207,10 +209,10 @@ class CloudMeasurementRunner(object):
             experiment_id = experiment_data["experiment_id"]
             ansible_file = ANSIBLE_PATH / (experiment_id + ".cfg")
             cidr_block = experiment_data["cidr_block"]
-            starting_date = str(datetime.now())
+            creation_date = str(datetime.now())
             self.save_experiment(db_path=DB_PATH, experiment_id=experiment_id, cloud_util=opts.cloud_util,
                                  experiment_type=opts.create_experiment, peered=0, network_optimized=0,
-                                 starting_date=starting_date, ending_date="None", status="VPCS CONFIGURED",
+                                 creation_date=creation_date, starting_date="None", status="VPCS CONFIGURED",
                                  ansible_file=str(ansible_file), cidr_block=cidr_block)
 
             self.save_regions(db_path=DB_PATH, experiment_data=experiment_data)
@@ -257,7 +259,6 @@ class CloudMeasurementRunner(object):
             print(run)
 
             instances_data_dict = {row[0]: {key.lower(): val for key, val in zip(data, row)} for row in instances_data}
-
             for instance in instances_data_dict:
                 ip = instances_data_dict[instance]["public_ip"]
                 list_of_destinations = [instances_data_dict[i]["public_ip"] for i in instances_data_dict]
@@ -273,6 +274,11 @@ class CloudMeasurementRunner(object):
             run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="raw",
                                                        module_args=crontab_cmd, forks=10, cmdline="--become")
             print(run)
+
+            starting_date = str(datetime.now())
+            CloudMeasurementDB.update_experiment_starting_time(experiment_id=experiment_id,
+                                                               db_path=DB_PATH,
+                                                               date=starting_date)
 
             exit(0)
 
@@ -320,6 +326,32 @@ class CloudMeasurementRunner(object):
                 run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="localhost", module="raw",
                                                            module_args=raw_args, forks=1, cmdline="")
                 print(run)
+
+            exit(0)
+
+        if opts.save_data:
+            experiment_id, destination_path = self.check_save_data_arg(args=opts.save_data)
+
+            ansible_file = CloudMeasurementDB.get_ansible_file(db_path=DB_PATH, experiment_id=experiment_id)
+            if ansible_file is None:
+                raise ValueError("Ansible File not configured in the DB")
+
+            raw_args = "cp -R {} {}".format(EXPERIMENTS_PATH / experiment_id, destination_path)
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="localhost", module="raw",
+                                                       module_args=raw_args, forks=1, cmdline="")
+
+            print(run)
+            experiment_keys = CloudMeasurementDB.get_experiment_columns(db_path=DB_PATH)
+            instance_keys = CloudMeasurementDB.get_instance_columns(db_path=DB_PATH)
+            experiment = CloudMeasurementDB.get_experiment(experiment_id=experiment_id, db_path=DB_PATH)
+            instances = CloudMeasurementDB.get_instances_experiment(experiment_id=experiment_id, db_path=DB_PATH)
+            data_dict = {"experiment": {k.lower(): v for k, v in zip(experiment_keys, experiment)},
+                         "instances": [
+                             {instance[0]: {k.lower(): v for k, v in zip(instance_keys, instance)}} for
+                             instance in instances]}
+
+            json_path = str(destination_path / experiment_id /"experiment.json")
+            save_dict_to_json(json_path=json_path, data_dict=data_dict)
             exit(0)
 
         if opts.delete_experiment:
@@ -341,15 +373,34 @@ class CloudMeasurementRunner(object):
             CloudMeasurementDB.delete_experiment(experiment_id=experiment_id, db_path=DB_PATH)
             exit(0)
 
+
+
         print("No operation")
         exit(0)
 
+    def check_save_data_arg(self, args):
+        arg = args.split(",")
+        if len(arg) == 2:
+            experiment_id, destination_path = arg[0], Path(arg[1])
+        elif len(arg) == 1:
+            experiment_id = arg[0]
+            destination_path = Path(getcwd())
+        else:
+            print("Not a valid Argument")
+            exit(1)
+
+        if CloudMeasurementDB.get_experiment(experiment_id=experiment_id, db_path=DB_PATH) is None:
+            print("Experiment {} does not exists".format(experiment_id))
+            exit(1)
+
+        if not destination_path.is_dir():
+            print("Path {} is not a valid directory".format(destination_path))
+            exit(1)
+
+        return experiment_id, destination_path
+
     @staticmethod
     def save_experiment(**kwargs):
-        headers_dict = {"EXPERIMENT_ID": "experiment_id", "CLOUD": "cloud_util", "EXPERIMENT": "experiment_type",
-                        "PEERED": "peered", "NETWORK_OPTIMIZED": "network_optimized", "STARTING_DATE": "starting_date",
-                        "ENDING_DATE": "ending_date", "STATUS": "status", "ANSIBLE_FILE": "ansible_file",
-                        "CIDR_BLOCK": "cidr_block"}
         CloudMeasurementDB.add_experiment(**kwargs)
 
     @staticmethod
@@ -430,6 +481,10 @@ def convert_json_to_dict(json_path):
     with open(Path(json_path), "r") as json_file:
         dictionary = eval(load(json_file))
     return dictionary
+
+def save_dict_to_json(json_path, data_dict):
+    with open(Path(json_path), "w") as json_file:
+        dump(obj=data_dict, fp=json_file)
 
 def cleanup():
     pass

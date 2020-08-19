@@ -18,7 +18,7 @@ class CloudMeasurementDB(object):
          PRIMARY KEY (DB_PATH)) ''')
 
         c.execute('''CREATE TABLE EXPERIMENTS ([EXPERIMENT_ID] TEXT PRIMARY KEY, [CLOUD] TEXT, [EXPERIMENT] TEXT,
-         [PEERED] INTEGER,[NETWORK_OPTIMIZED] INTEGER, [STARTING_DATE] date, [ENDING_DATE] date, [STATUS] TEXT,
+         [PEERED] INTEGER,[NETWORK_OPTIMIZED] INTEGER, [CREATION_DATE] date, [STARTING_DATE] date, [STATUS] TEXT,
           [ANSIBLE_FILE] TEXT,[CIDR_BLOCK] TEXT) ''')
 
         c.execute('''CREATE TABLE REGIONS ([EXPERIMENT_ID] TEXT, [REGION] TEXT, [VPC_ID] TEXT, [STATUS] TEXT,
@@ -71,6 +71,23 @@ class CloudMeasurementDB(object):
         return rows
 
     @staticmethod
+    def get_instance_columns(db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT NAME FROM pragma_table_info("INSTANCES") ''')
+        rows = c.fetchall()
+        return [row[0] for row in rows]
+
+    @staticmethod
+    def get_experiment_columns(db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT NAME FROM pragma_table_info("EXPERIMENTS") ''')
+        rows = c.fetchall()
+        return [row[0] for row in rows]
+
+
+    @staticmethod
     def get_regions(db_path):
         conn = sqlite3.connect(str(db_path))
         c = conn.cursor()
@@ -91,12 +108,12 @@ class CloudMeasurementDB(object):
         pass
 
     @staticmethod
-    def add_experiment(db_path, experiment_id, cloud_util, experiment_type, peered, network_optimized, starting_date,
-                       ending_date, status, ansible_file, cidr_block):
+    def add_experiment(db_path, experiment_id, cloud_util, experiment_type, peered, network_optimized, creation_date,
+                       starting_date, status, ansible_file, cidr_block):
         conn = sqlite3.connect(str(db_path))
         c = conn.cursor()
         c.execute('''INSERT INTO EXPERIMENTS VALUES ('{}', '{}', '{}','{}', '{}', '{}','{}', '{}', '{}', '{}')'''.format(
-            experiment_id, cloud_util, experiment_type, peered, network_optimized, starting_date, ending_date,
+            experiment_id, cloud_util, experiment_type, peered, network_optimized, creation_date, starting_date,
             status, ansible_file, cidr_block))
 
         conn.commit()
@@ -200,3 +217,17 @@ class CloudMeasurementDB(object):
         if not rows:
             return None
         return rows
+
+    @staticmethod
+    def update_experiment_starting_time(experiment_id, db_path, date):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''UPDATE EXPERIMENTS SET STARTING_DATE='{}' WHERE EXPERIMENT_ID='{}'; '''.format(date,
+                                                                                                    experiment_id))
+        conn.commit()
+        c.close()
+
+if __name__ == '__main__':
+    print(CloudMeasurementDB.get_experiment_columns(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db"))
+    print(CloudMeasurementDB.get_instance_columns(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db"))
+    print(CloudMeasurementDB.get_experiment(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db", experiment_id="86EF9987"))
