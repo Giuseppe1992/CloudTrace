@@ -86,7 +86,6 @@ class CloudMeasurementDB(object):
         rows = c.fetchall()
         return [row[0] for row in rows]
 
-
     @staticmethod
     def get_regions(db_path):
         conn = sqlite3.connect(str(db_path))
@@ -227,7 +226,10 @@ class CloudMeasurementDB(object):
         conn.commit()
         c.close()
 
+
 if __name__ == '__main__':
     print(CloudMeasurementDB.get_experiment_columns(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db"))
     print(CloudMeasurementDB.get_instance_columns(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db"))
-    print(CloudMeasurementDB.get_experiment(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db", experiment_id="86EF9987"))
+    print(CloudMeasurementDB.get_experiment(db_path="/Users/giuseppe/.CloudMeasurement/CloudMeasurementDB.db",
+
+                                            experiment_id="86EF9987"))
