@@ -62,7 +62,7 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--init', action='store_true', default=None, help='initialize the environment')
 
-        opts.add_option('--configuration', action='store_true', default=None, help='initialize the environment')
+        opts.add_option('--configuration', action='store_true', default=None, help='get the configurations')
 
         opts.add_option('--purge', action='store_true', default=None, help='purge all the active experiments')
 
@@ -79,6 +79,8 @@ class CloudMeasurementRunner(object):
         opts.add_option('--retrieve_data', type='string', default=None, help='retrieve data')
 
         opts.add_option('--save_data', type='string', default=None, help='save data, EXP_ID,[PATH]')
+
+        ######## OPTIONAL ARGS ########
 
         opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
 
@@ -202,7 +204,7 @@ class CloudMeasurementRunner(object):
                                            cloud_util=CLOUDUTILS[opts.cloud_util])
 
             print("* CREATING THE VPCS IN {}".format(list_of_regions))
-            experiment_data = experiment.create_multiregional_vpcs()
+            experiment_data = experiment.create_experiment_environment()
 
             print(experiment_data)
 
@@ -410,12 +412,12 @@ class CloudMeasurementRunner(object):
         list_of_regions.remove("experiment_id")
 
         experiment_id = experiment_data["experiment_id"]
-
         for region in list_of_regions:
-            vpc_id = experiment_data[region]["vpc_id"]
-            status = "VPC UP"
-            CloudMeasurementDB.add_region(db_path=db_path, experiment_id=experiment_id, region=region,
-                                          vpc_id=vpc_id, status=status)
+            for vpc in experiment_data[region]:
+                vpc_id = vpc["vpc_id"]
+                status = "VPC UP"
+                CloudMeasurementDB.add_region(db_path=db_path, experiment_id=experiment_id, region=region,
+                                              vpc_id=vpc_id, status=status)
 
     @staticmethod
     def save_instances(db_path, experiment_data):
@@ -425,19 +427,20 @@ class CloudMeasurementRunner(object):
         experiment_id = experiment_data["experiment_id"]
 
         for region in list_of_regions:
-            instance_id = experiment_data[region]["instance_id"]
-            machine_type = experiment_data[region]["machine_type"]
-            public_address = experiment_data[region]["public_address"]
-            private_address = experiment_data[region]["private_address"]
-            availability_zone = experiment_data[region]["availability_zone"]
-            vpc_id = experiment_data[region]["vpc_id"]
-            status = "RUNNING"
-            key_pair_id = experiment_data[region]["key_pair_id"]
-            CloudMeasurementDB.add_instance(db_path=db_path, instance_id=instance_id, machine_type=machine_type,
-                                            experiment_id=experiment_id, region=region,
-                                            availability_zone=availability_zone, vpc_id=vpc_id, status=status,
-                                            public_address=public_address, private_address=private_address,
-                                            key_pair_id=key_pair_id)
+            for instance_dict in experiment_data[region]:
+                instance_id = instance_dict["instance_id"]
+                machine_type = instance_dict["machine_type"]
+                public_address = instance_dict["public_address"]
+                private_address = instance_dict["private_address"]
+                availability_zone = instance_dict["availability_zone"]
+                vpc_id = instance_dict["vpc_id"]
+                status = "RUNNING"
+                key_pair_id = instance_dict["key_pair_id"]
+                CloudMeasurementDB.add_instance(db_path=db_path, instance_id=instance_id, machine_type=machine_type,
+                                                experiment_id=experiment_id, region=region,
+                                                availability_zone=availability_zone, vpc_id=vpc_id, status=status,
+                                                public_address=public_address, private_address=private_address,
+                                                key_pair_id=key_pair_id)
 
     @staticmethod
     def save_inventory(ansible_path, experiment_data):
@@ -446,10 +449,11 @@ class CloudMeasurementRunner(object):
         list_of_regions.remove("cidr_block")
         list_of_regions.remove("experiment_id")
         for region in list_of_regions:
-            instance_id = experiment_data[region]["instance_id"]
-            public_address = experiment_data[region]["public_address"]
-            inventory_configuration.add_host(host_id=instance_id, region=region, public_ip=public_address,
-                                             user="ubuntu", password=None)
+            for instance_dict in experiment_data[region]:
+                instance_id = instance_dict["instance_id"]
+                public_address = instance_dict["public_address"]
+                inventory_configuration.add_host(host_id=instance_id, region=region, public_ip=public_address,
+                                                 user="ubuntu", password=None)
 
         inventory_configuration.make_inventory()
 

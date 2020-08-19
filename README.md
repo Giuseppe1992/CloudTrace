@@ -35,11 +35,16 @@ vagrant@ubuntu-bionic:~/CloudMeasurement$ cm
 No operation
 ```
 
+# Configure the Environment
+
 #### Configure CloudMeasurement
 In the configuration the user has to configure the AWS Access key ID and Secret Access Key, if it is using AWS for the
 first time.
-In the last line, the user has to specify the path of the private key that will be use to connect with the virtual
- instances in the experiments, make sure to give a correct path,  by default is pointing the default key from ~/.ssh
+
+In the last line, the user has to specify the path of the private key that will be used to connect with the virtual
+ instances in the experiments.
+  
+Make sure to give a correct path, by default is pointing the default key from ~/.ssh
  directory
 
 ```bash
@@ -85,5 +90,7 @@ Options:
 ...
 
 ```
+
+# Run Experiments
 
 #### Create your first experiment

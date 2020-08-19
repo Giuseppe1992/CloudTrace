@@ -10,8 +10,8 @@ REMOTE_USER = "ubuntu"
 
 
 class MultiregionalTrace(object):
-    def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None,
-                 machine_type_mapping=None, cloud_util=AWSUtils):
+    def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None, machine_type_mapping=None,
+                 cloud_util=AWSUtils, vpc_peering=False, network_optimized=False):
         """
         :param list_of_regions: list of regions
         :param az_mapping: dict
@@ -32,6 +32,8 @@ class MultiregionalTrace(object):
 
         self.az_mapping = self.__get_az_mapping(az_mapping=az_mapping)
         self.machine_type_mapping = self.__get_machine_type_mapping(machine_type_mapping=machine_type_mapping)
+        self.vpc_peering = vpc_peering
+        self.network_optimized = network_optimized
 
     def __get_az_mapping(self, az_mapping):
         mapping = dict()
@@ -67,6 +69,9 @@ class MultiregionalTrace(object):
                     mapping[region] = map_value
         return mapping
 
+    def create_experiment_environment(self):
+        return self.create_multiregional_vpcs()
+
     def create_multiregional_vpcs(self, cidr_block="10.0.0.0/16"):
         if self.vpcs_data is not None:
             raise PermissionError("the experiment vpc is already created: {}".format(self.vpcs_data))
@@ -81,7 +86,8 @@ class MultiregionalTrace(object):
         vpcs_data["cidr_block"] = cidr_block
         vpcs_data["experiment_id"] = experiment_id
         for region in self.list_of_regions:
-            vpc_id = self.cloud_utils.create_vpc(vpc_name=experiment_id, region=region, cidr_block=cidr_block)
+            subnet_pool = str(next(subnetwork_pool_generator))
+            vpc_id = self.cloud_utils.create_vpc(vpc_name=experiment_id, region=region, cidr_block=subnet_pool)
             self.cloud_utils.modify_EnableDnsSupport(vpc_id=vpc_id, region=region, value=True)
             self.cloud_utils.modify_EnableDnsHostnames(vpc_id=vpc_id, region=region, value=True)
             internet_gateway_id = self.cloud_utils.create_internet_gateway(region=region)
@@ -101,43 +107,59 @@ class MultiregionalTrace(object):
             self.cloud_utils.add_route(region=region, route_table_id=public_route_table_id,
                                        gateway_id=internet_gateway_id, destination_cidr_block='0.0.0.0/0')
             az = self.az_mapping[region]
-            subnet_pool = str(next(subnetwork_pool_generator))
             public_subnet_id = self.cloud_utils.create_subnet(vpc_id=vpc_id, region=region, az=az,
                                                               subnet_name="Public Subnet",
                                                               cidr_block=subnet_pool,
                                                               route_table_id=public_route_table_id)
             self.cloud_utils.modify_MapPublicIpOnLaunch(subnet_id=public_subnet_id, region=region, value=True)
-            vpcs_data[region] = {"vpc_id": vpc_id, "internet_gateway_id": internet_gateway_id,
-                                 "public_route_table_id": public_route_table_id, "security_group_id": security_group_id,
-                                 "availability_zone": az, "public_subnet": public_subnet_id}
-        self.cloud_utils.finalize(vpcs_data)
+            vpcs_data[region] = [{"vpc_id": vpc_id, "internet_gateway_id": internet_gateway_id,
+                                  "public_route_table_id": public_route_table_id,
+                                  "security_group_id": security_group_id,
+                                  "availability_zone": az,
+                                  "public_subnet": public_subnet_id}]
+
+        if self.vpc_peering:
+            self.enable_vpc_peering(vpcs_data)
+
+        if self.network_optimized:
+            self.enable_network_optimized()
+
         self.vpcs_data = vpcs_data
+
         return vpcs_data
+
+    def enable_vpc_peering(self):
+        pass
 
     def create_instances(self, key_pair_id="id_rsa"):
         # TODO check that key_pair exists in all the regions
         for region in self.list_of_regions:
-            public_subnet_id = self.vpcs_data[region]["public_subnet"]
-            image_ami = self.cloud_utils.get_image_AMI_from_region(region=region, image_name=IMAGE_NAME)
-            regional_instances_ids = self.cloud_utils.run_instances(region=region, subnet_id=public_subnet_id,
-                                                                    instance_type=self.machine_type_mapping[region],
-                                                                    key_name=key_pair_id, image_id=image_ami,
-                                                                    number_of_instances=1)
-            self.vpcs_data[region]["instance_id"] = regional_instances_ids[0]
+            for instance_dict in self.vpcs_data[region]:
+                print(self.vpcs_data)
+                public_subnet_id = instance_dict["public_subnet"]
+                image_ami = self.cloud_utils.get_image_AMI_from_region(region=region, image_name=IMAGE_NAME)
+                regional_instances_ids = self.cloud_utils.run_instances(region=region, subnet_id=public_subnet_id,
+                                                                        instance_type=self.machine_type_mapping[region],
+                                                                        key_name=key_pair_id, image_id=image_ami,
+                                                                        number_of_instances=1)
+                instance_dict["instance_id"] = regional_instances_ids[0]
 
         for region in self.list_of_regions:
-            instance_id = self.vpcs_data[region]["instance_id"]
-            security_group = self.vpcs_data[region]["security_group_id"]
-            self.cloud_utils.wait_instances_running(region=region, instances_id_list=[instance_id])
-            self.cloud_utils.modify_security_group(region=region, instance_ids=[instance_id], groups=[security_group])
-            self.vpcs_data[region]["public_address"] = self.cloud_utils.get_instance_public_ip(region=region,
-                                                                                               instance_id=instance_id)
-            self.vpcs_data[region]["private_address"] = self.cloud_utils.get_instance_private_ip(region=region,
-                                                                                                 instance_id=instance_id
-                                                                                                 )
-            self.vpcs_data[region]["availability_zone"] = self.az_mapping[region]
-            self.vpcs_data[region]["machine_type"] = self.machine_type_mapping[region]
-            self.vpcs_data[region]["key_pair_id"] = key_pair_id
+            for instance_dict in self.vpcs_data[region]:
+                instance_id = instance_dict["instance_id"]
+                security_group = instance_dict["security_group_id"]
+                self.cloud_utils.wait_instances_running(region=region, instances_id_list=[instance_id])
+                self.cloud_utils.modify_security_group(region=region, instance_ids=[instance_id],
+                                                       groups=[security_group])
+                instance_dict["public_address"] = self.cloud_utils.get_instance_public_ip(
+                    region=region,
+                    instance_id=instance_id)
+                instance_dict["private_address"] = self.cloud_utils.get_instance_private_ip(
+                    region=region,
+                    instance_id=instance_id)
+                instance_dict["availability_zone"] = self.az_mapping[region]
+                instance_dict["machine_type"] = self.machine_type_mapping[region]
+                instance_dict["key_pair_id"] = key_pair_id
 
         return self.vpcs_data
 

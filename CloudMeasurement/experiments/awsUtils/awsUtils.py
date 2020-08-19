@@ -547,10 +547,6 @@ class AWSUtils(object):
 
         return ec2client.delete_vpc(VpcId=vpc.id)
 
-    def finalize(self, data):
-        # TODO: pass the experiment in the db
-        pass
-
 
 if __name__ == '__main__':
     t = AWSUtils()
