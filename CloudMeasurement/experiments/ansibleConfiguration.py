@@ -23,7 +23,7 @@ class InventoryConfiguration(object):
         if self.items is dict():
             raise ValueError("the inventory is empty")
 
-        with open(self.path, "a+") as inventory:
+        with open(self.path, "w") as inventory:
             for region in self.items.keys():
                 inventory.write("\n[{}]\n".format(region.replace("-", "_")))
                 for item in self.items[region]:
