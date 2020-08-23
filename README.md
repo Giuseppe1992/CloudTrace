@@ -97,7 +97,21 @@ Options:
 
 ## Multiregional Traceroute
 
+<object data="images/multiregional.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="images/multiregional.pdf">
+        <p>This browser does not support PDFs. Please download the PDF to view it: <a href="http://yoursite.com/the.pdf">Download PDF</a>.</p>
+    </embed>
+</object>
+
+
 ## Regional Traceroute
+
+<object data="images/regional.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="images/regional.pdf">
+        <p>This browser does not support PDFs. Please download the PDF to view it: <a href="http://yoursite.com/the.pdf">Download PDF</a>.</p>
+    </embed>
+</object>
+
 
 ### Create your first experiment
 
