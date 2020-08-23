@@ -26,7 +26,7 @@ class RegionalTrace(MultiregionalTrace):
 
         # Overrides the previus az_mapping with the new function
         self.az_mapping = self.__get_az_mapping(az_mapping=az_mapping)
-        #self.machine_type_mapping = self.__get_machine_type_mapping(machine_type_mapping=machine_type_mapping)
+        # self.machine_type_mapping = self.__get_machine_type_mapping(machine_type_mapping=machine_type_mapping)
         self.vpc_peering = vpc_peering
         self.network_optimized = network_optimized
 
