@@ -15,6 +15,7 @@ import termtables as tt
 
 
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
+from CloudMeasurement.experiments.regionalTrace import RegionalTrace
 from CloudMeasurement.liteSQLdb import CloudMeasurementDB
 from CloudMeasurement.experiments.ansibleConfiguration import InventoryConfiguration
 from CloudMeasurement.experiments.awsUtils.awsUtils import AWSUtils
@@ -22,7 +23,7 @@ from sqlite3 import OperationalError
 from datetime import datetime
 
 
-EXPERIMENTS = {"multiregionalTrace": MultiregionalTrace}
+EXPERIMENTS = {"multiregional": MultiregionalTrace, "regional": RegionalTrace}
 CLOUDUTILS = {"aws": AWSUtils }
 
 home = Path.home()
@@ -219,10 +220,12 @@ class CloudMeasurementRunner(object):
 
             self.save_regions(db_path=DB_PATH, experiment_data=experiment_data)
 
-            print("* CREATING THE INSTANCES".format(list_of_regions))
+            print("* CREATING THE INSTANCES {}".format(list_of_regions))
             experiment_data = experiment.create_instances(key_pair_id=opts.key_pair_id)
             self.save_instances(db_path=DB_PATH, experiment_data=experiment_data)
             self.save_inventory(ansible_path=ansible_file, experiment_data=experiment_data)
+            print("* EXPERIMENT CORRECTLY CREATED! \n "
+                  " you can start the experiment with: cm -s {}".format(experiment_id))
             exit(0)
 
         if opts.start_experiment:
@@ -241,8 +244,8 @@ class CloudMeasurementRunner(object):
                                                        module_args="update_cache=yes name=traceroute",
                                                        forks=10, cmdline="--become")
             print(run)
-            experiment_class = EXPERIMENTS[CloudMeasurementDB.get_experiment_type(db_path=DB_PATH, experiment_id=experiment_id)]
-
+            # experiment_class = EXPERIMENTS[CloudMeasurementDB.get_experiment_type(db_path=DB_PATH,
+            # experiment_id=experiment_id)]
             data = ["INSTANCE_ID", "MACHINE_TYPE", "REGION", "AVAILABILITY_ZONE", "PUBLIC_IP", "PRIVATE_IP"]
             instances_data = CloudMeasurementDB.get_instances_data(db_path=DB_PATH, experiment_id=experiment_id,
                                                                    db_columns=data)

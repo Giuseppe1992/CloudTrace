@@ -115,8 +115,8 @@ class MultiregionalTrace(object):
             vpcs_data[region] = [{"vpc_id": vpc_id, "internet_gateway_id": internet_gateway_id,
                                   "public_route_table_id": public_route_table_id,
                                   "security_group_id": security_group_id,
-                                  "availability_zone": az,
-                                  "public_subnet": public_subnet_id}]
+                                  "availability_zone": [az],
+                                  "public_subnet": [public_subnet_id]}]
 
         if self.vpc_peering:
             self.enable_vpc_peering(vpcs_data)
@@ -136,7 +136,7 @@ class MultiregionalTrace(object):
         for region in self.list_of_regions:
             for instance_dict in self.vpcs_data[region]:
                 print(self.vpcs_data)
-                public_subnet_id = instance_dict["public_subnet"]
+                public_subnet_id = instance_dict["public_subnet"][0]
                 image_ami = self.cloud_utils.get_image_AMI_from_region(region=region, image_name=IMAGE_NAME)
                 regional_instances_ids = self.cloud_utils.run_instances(region=region, subnet_id=public_subnet_id,
                                                                         instance_type=self.machine_type_mapping[region],
@@ -157,6 +157,7 @@ class MultiregionalTrace(object):
                 instance_dict["private_address"] = self.cloud_utils.get_instance_private_ip(
                     region=region,
                     instance_id=instance_id)
+                # TODO: Correct, now self.az_mapping[region] is a list
                 instance_dict["availability_zone"] = self.az_mapping[region]
                 instance_dict["machine_type"] = self.machine_type_mapping[region]
                 instance_dict["key_pair_id"] = key_pair_id
@@ -192,5 +193,5 @@ class MultiregionalTrace(object):
 if __name__ == '__main__':
     a = MultiregionalTrace(list_of_regions=["eu-central-1"])
     a.create_multiregional_vpcs()
-    a.create_instances(key_pair="id_rsa")
+    a.create_instances(key_pair_id="id_rsa")
     a.purge()
