@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/Giuseppe1992/CloudMeasurement.svg?branch=master)](https://travis-ci.org/Giuseppe1992/CloudMeasurement)
 
 # CloudMeasurement
-CloudMeasurement is a CLI that create multiple experiments in different Cloud infrastructures
+CloudMeasurement is a CLI that create multiple Traceroute experiments in different Cloud infrastructures
 (for now just AWS, but Google Cloud is planned ).
 
 # Installation
@@ -17,6 +17,8 @@ vagrant@ubuntu-bionic:~$ git clone https://github.com/Giuseppe1992/CloudMeasurem
 
 
 ```
+
+#### With MAC OSX make sure to have git and python3-pip and install the awscli via homebrew 
 
 #### Install the dependencies and the software
 ```bash
