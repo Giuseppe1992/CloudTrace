@@ -118,6 +118,19 @@ vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -c regional --regions="eu-central-1
 
 ```
 
+#### The --key_pair_id parameter
+
+It is very important to be sure that the public key is already imported in all the regions where the user wants to run
+the experiments.
+By default --key_pair_id="id_rsa", this means that in every regions there is a key pair named "id_rsa" that is the 
+public part of the keypair imported in the tool during the initial configuration.
+To specify another key_pair_id, you have to create the experiment like the next example:
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -c multiregional --regions="eu-central-1,eu-west-2" --key_pair_id=YOUR_ID
+
+```
+
 #### List the created Experiments
 
 ```bash
