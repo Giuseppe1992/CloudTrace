@@ -93,4 +93,65 @@ Options:
 
 # Run Experiments
 
-#### Create your first experiment
+## Multiregional Traceroute
+
+## Regional Traceroute
+
+### Create your first experiment
+
+#### Multiregional Trace creation
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -c multiregional --regions="eu-central-1,eu-west-2"
+
+```
+
+#### Regional Trace creation
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -c regional --regions="eu-central-1"
+
+```
+
+#### List the created Experiments
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -e
+
+```
+
+#### List the created Instances
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -i
+
+```
+
+#### Start your experiment
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -s EXPERIMENT_ID
+
+```
+
+#### Retrieve all the data of your experiment
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm --retrieve_data EXPERIMENT_ID
+
+```
+
+#### Save the data in a specified path
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm --save_data EXPERIMENT_ID,LOCAL_PATH
+
+```
+
+#### Delete an experiment
+
+```bash
+vagrant@ubuntu-bionic:~/CloudMeasurement$ cm -d EXPERIMENT_ID
+
+```
+
