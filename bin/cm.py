@@ -81,6 +81,8 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--save_data', type='string', default=None, help='save data, EXP_ID,[PATH]')
 
+        opts.add_option('--plot_data', type='string', default=None, help='plot the data in the path')
+
         ######## OPTIONAL ARGS ########
 
         opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
@@ -378,10 +380,23 @@ class CloudMeasurementRunner(object):
             CloudMeasurementDB.delete_experiment(experiment_id=experiment_id, db_path=DB_PATH)
             exit(0)
 
+        if opts.plot_data:
 
+            path = Path(opts.plot_data)
+            self.check_plot_data(path)
+
+            self.plot_data(path)
+            exit(0)
 
         print("No operation")
         exit(0)
+
+
+    def check_plot_data(self, path):
+        None
+
+    def plot_data(self, path):
+        None
 
     def check_save_data_arg(self, args):
         arg = args.split(",")
