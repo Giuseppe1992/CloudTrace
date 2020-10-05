@@ -11,7 +11,9 @@ from json import load, dump
 from os import system, makedirs, umask, getcwd
 from optparse import OptionParser
 from pathlib import Path
+from re import match
 import termtables as tt
+
 
 
 from CloudMeasurement.experiments.multiregionalTrace import MultiregionalTrace
@@ -246,6 +248,11 @@ class CloudMeasurementRunner(object):
                                                        module_args="update_cache=yes name=traceroute",
                                                        forks=10, cmdline="--become")
             print(run)
+
+            run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="apt",
+                                                       module_args="update_cache=yes name=paris-traceroute",
+                                                       forks=10, cmdline="--become")
+            print(run)
             # experiment_class = EXPERIMENTS[CloudMeasurementDB.get_experiment_type(db_path=DB_PATH,
             # experiment_id=experiment_id)]
             data = ["INSTANCE_ID", "MACHINE_TYPE", "REGION", "AVAILABILITY_ZONE", "PUBLIC_IP", "PRIVATE_IP"]
@@ -278,6 +285,7 @@ class CloudMeasurementRunner(object):
                 print(run)
 
             crontab_cmd = "crontab {}".format(CRONTAB_CFG_PATH)
+            print(crontab_cmd)
             run = InventoryConfiguration.run_inventory(ansible_file, host_pattern="all", module="raw",
                                                        module_args=crontab_cmd, forks=10, cmdline="--become")
             print(run)
@@ -381,19 +389,41 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.plot_data:
-
-            path = Path(opts.plot_data)
+            path = opts.plot_data
             self.check_plot_data(path)
-
+            ip_list = self.get_ip_dir(path)
+            for ip in ip_list:
+                self.unzip(Path(path) / ip / "experiment.zip")
             self.plot_data(path)
             exit(0)
 
         print("No operation")
         exit(0)
 
+    @staticmethod
+    def unzip(zip_file):
+        extracted_dir = zip_file.parent
+        system("unzip -u -d {} {}".format(extracted_dir, zip_file))
 
-    def check_plot_data(self, path):
-        None
+    @staticmethod
+    def check_plot_data(path):
+        destination_path = Path(path)
+
+        if not destination_path.is_dir():
+            print("Path {} is not a valid directory".format(destination_path))
+            exit(1)
+
+        file_list = [file.name for file in destination_path.glob("*")]
+        if "experiment.json" not in file_list:
+            print("Not a valid directory, experiment.json is missing")
+            exit(1)
+
+    @staticmethod
+    def get_ip_dir(path):
+        destination_path = Path(path)
+        file_list = [file.name for file in destination_path.glob("*")]
+        ip_list = list(filter(lambda x: match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", x), file_list))
+        return ip_list
 
     def plot_data(self, path):
         None
@@ -481,9 +511,11 @@ class CloudMeasurementRunner(object):
         for ip in list_of_destinations:
             ip_name = "ip_" + ip + "date_"
             ip_name = ip_name.replace(".", "_")
-            tr_string += 'traceroute -n -p 33434 {} -U -m 60 | tee {}$(date +"%M_%k_%d_%m_%Y").l' \
-                         'og > {}$(date +"%M_%k_%d_%m_%Y").log \n'.format(ip, EXPERIMENT_REMOTE_DIR / ip_name,
-                                                                          EXPERIMENT_BK_REMOTE_DIR / ip_name)
+            tr_string += 'sudo paris-traceroute -n -p 33434 -U -m 60 {} |' \
+                         ' tee {}$(date +"%M_%k_%d_%m_%Y" |' \
+                         ' tr -d \' \').log > {}$(date +"%M_%k_%d_%m_%Y" |' \
+                         ' tr -d \' \').log \n'.format(ip, EXPERIMENT_REMOTE_DIR / ip_name,
+                                                       EXPERIMENT_BK_REMOTE_DIR / ip_name)
 
         with open(path, "w") as f:
             f.write(tr_string)

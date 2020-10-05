@@ -21,8 +21,8 @@ class OneWayTraceroute(object):
     @staticmethod
     def get_info_from_file(file_path):
         file_name = file_path.name
-
-        ip, datetime = file_name.replace(".log", "").replace("ip_", "") .split("date_")
+        print(file_name)
+        ip, datetime = file_name.replace(".log", "").replace("ip_", "").split("date_")
         ip = ip.replace("_", ".")
         minute, hour, day, month, year = datetime.split("_")
         date = {'month': month, 'day': day, 'year': year}
@@ -39,8 +39,9 @@ class OneWayTraceroute(object):
 
 
 if __name__ == '__main__':
-    src = "18.195.116.246"
-    dst = "34.248.163.149"
+    src = "35.176.243.84"
+    dst = "3.124.209.235"
     traceroute = OneWayTraceroute(source=src, destination=dst)
-    traceroute.build_tracertroute(path=Path("/Users/giuseppedilena/Desktop/4FC48CC3/{}/experiments/ip_{}date_39_13_30_09_2020.log".format(src, dst.replace(".","_"))))
+    file = "/Users/giuseppedilena/Desktop/992D74A3/{}/experiments/ip_{}date_39_13_30_09_2020.log".format(src, dst.replace(".","_"))
+    traceroute.build_tracertroute(path=Path(file))
     print(traceroute.traceroute_list)
