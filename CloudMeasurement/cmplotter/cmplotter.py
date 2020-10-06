@@ -64,7 +64,8 @@ class Plotter(object):
 
         return traceroutes
 
-    def plot(self, starting_date, ending_date, starting_time, ending_time, delta=timedelta(hours=1), description=None, **kwargs):
+    def plot(self, starting_date, ending_date, starting_time, ending_time, delta=timedelta(hours=1),
+             description=None, **kwargs):
         self.check_dates_format(starting_date, ending_date)
         self.check_time_format(starting_time, ending_time)
 
