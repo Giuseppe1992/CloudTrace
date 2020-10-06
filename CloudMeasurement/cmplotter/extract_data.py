@@ -15,7 +15,7 @@ class OneWayTraceroute(object):
 
     def __str__(self):
         return str({"src": self.source, "dst": self.destination, "traceroute": self.traceroute,
-                "date": self.date, "time": self.time, "path": self.path})
+                    "date": self.date, "time": self.time, "path": self.path})
 
     @staticmethod
     def read_traceroute(file_path):
@@ -53,7 +53,7 @@ class OneWayTraceroute(object):
         if len(intervall) == 5:
             n, ip_, t1, t2, t3 = intervall
             new_t = []
-            for t in (t1,t2,t3):
+            for t in (t1, t2, t3):
                 m = match(r"(([0-9]+\.([0-9]{1,3}))ms)|[0-9]+ms", t)
                 if m:
                     start, end = m.span()
@@ -63,7 +63,7 @@ class OneWayTraceroute(object):
                     new_t.append(None)
                 else:
                     raise ValueError("Value {} not convertible".format(t))
-            return n, ip_, *new_t
+            return tuple([n, ip_] + new_t)
 
         raise ValueError(intervall)
 
@@ -88,4 +88,3 @@ if __name__ == '__main__':
     traceroute.build_traceroute()
     print(traceroute.to_dict())
     print(traceroute.number_of_hops(), traceroute.get_delay())
-

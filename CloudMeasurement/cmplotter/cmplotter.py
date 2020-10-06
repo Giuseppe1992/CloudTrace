@@ -64,7 +64,7 @@ class Plotter(object):
 
         return traceroutes
 
-    def plot(self, starting_date, ending_date, starting_time, ending_time, description=None, **kwargs):
+    def plot(self, starting_date, ending_date, starting_time, ending_time, delta=timedelta(hours=1), description=None, **kwargs):
         self.check_dates_format(starting_date, ending_date)
         self.check_time_format(starting_time, ending_time)
 
@@ -92,8 +92,8 @@ class Plotter(object):
 
         for src in self.traceroutes.keys():
             for dst in self.traceroutes[src].keys():
-                for trace in self.traceroutes[src][dst]:
-                    print(trace)
+                pass
+                # TODO: check that start min and end max
 
         if ending_datetime-starting_datetime <= timedelta(hours=1):
             self.plot_hour()
