@@ -2,6 +2,7 @@ from pathlib import Path
 from os import system
 from re import match
 from datetime import datetime, timedelta
+from json import load
 
 from CloudMeasurement.cmplotter.extract_data import OneWayTraceroute
 
@@ -78,46 +79,163 @@ class Plotter(object):
         ending_datetime = datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=second)
         print(starting_datetime, ending_datetime, ending_datetime-starting_datetime)
 
-        def filter_datetime(trace):
-            trace_date = trace["date"]
-            trace_time = trace["time"]
-            trace_datetime = datetime(year=int(trace_date["year"]), month=int(trace_date["month"]),
-                                      day=int(trace_date["day"]), hour=int(trace_time["hour"]),
-                                      minute=int(trace_time["minute"]), second=int(trace_time["second"]))
+        experiment_delta = ending_datetime - starting_datetime
+        if experiment_delta.total_seconds() <= 300:
+            ValueError("Please provide an experiment with more than 5 minutes data")
 
-            return starting_datetime <= trace_datetime <= ending_datetime
-
-        for src in self.traceroutes.keys():
-            for dst in self.traceroutes[src].keys():
-                self.traceroutes[src][dst] = list(filter(filter_datetime, self.traceroutes[src][dst]))
+        r_experiment_delta = experiment_delta % delta
+        if not r_experiment_delta:
+            ValueError("Your delta is not consistent with the starting and ending time,"
+                       " r_experiment_delta={}".format(r_experiment_delta))
 
         for src in self.traceroutes.keys():
             for dst in self.traceroutes[src].keys():
-                pass
-                # TODO: check that start min and end max
+                self.traceroutes[src][dst] = \
+                    list(filter(lambda x: starting_datetime <= self.datetime_convertion(x) <= ending_datetime,
+                                self.traceroutes[src][dst]))
 
-        if ending_datetime-starting_datetime <= timedelta(hours=1):
-            self.plot_hour()
-        elif ending_datetime-starting_datetime <= timedelta(days=1):
-            self.plot_day()
-        elif ending_datetime-starting_datetime <= timedelta(days=7):
-            self.plot_week()
-        elif ending_datetime-starting_datetime <= timedelta(days=30):
-            self.plot_month()
-        else:
-            raise ValueError("WTF are you trying to plot?")
+        for src in self.traceroutes.keys():
+            for dst in self.traceroutes[src].keys():
+                max_datetime = self.datetime_convertion(
+                    max(self.traceroutes[src][dst], key=lambda x: self.datetime_convertion(x))
+                )
+                min_datetime = self.datetime_convertion(
+                    min(self.traceroutes[src][dst], key=lambda x: self.datetime_convertion(x))
+                )
+                if min_datetime != starting_datetime:
+                    raise ValueError("Not enough data, datetime starts at {}, you asked for {}".format(
+                        min_datetime, starting_datetime
+                    ))
+                if max_datetime != ending_datetime:
+                    raise ValueError("Not enough data, datetime ends at {}, you asked for {}".format(
+                        max_datetime, ending_datetime
+                    ))
 
-    def plot_hour(self):
-        pass
+        abs_ylim_min_dl, abs_ylim_max_dl, abs_ylim_min_hop, abs_ylim_max_hop = 1000, 0, 1000, 0
 
-    def plot_day(self):
-        pass
+        for src in self.traceroutes.keys():
+            for dst in self.traceroutes[src].keys():
+                ylim_min_dl = min(self.traceroutes[src][dst], key=lambda x: x["delay"])
+                ylim_min_dl = ylim_min_dl["delay"]
+                if abs_ylim_min_dl > ylim_min_dl:
+                    abs_ylim_min_dl = ylim_min_dl
 
-    def plot_week(self):
-        pass
+                ylim_max_dl = max(self.traceroutes[src][dst], key=lambda x: x["delay"])
+                ylim_max_dl = ylim_max_dl["delay"]
+                if abs_ylim_max_dl < ylim_max_dl:
+                    abs_ylim_max_dl = ylim_max_dl
 
-    def plot_month(self):
-        pass
+                ylim_min_hop = min(self.traceroutes[src][dst], key=lambda x: x["hops"])
+                ylim_min_hop = ylim_min_hop["hops"]
+                if abs_ylim_min_hop > ylim_min_hop:
+                    abs_ylim_min_hop = ylim_min_hop
+
+                ylim_max_hop = max(self.traceroutes[src][dst], key=lambda x: x["hops"])
+                ylim_max_hop = ylim_max_hop["hops"]
+                if abs_ylim_max_hop < ylim_max_hop:
+                    abs_ylim_max_hop = ylim_max_hop
+
+        for src in self.traceroutes.keys():
+            for dst in self.traceroutes[src].keys():
+                self.plot_experiment_hops(src, dst, starting_datetime, ending_datetime, delta, description,
+                                          (abs_ylim_min_hop, abs_ylim_max_hop), **kwargs)
+                self.plot_experiment_delay(src, dst, starting_datetime, ending_datetime, delta, description,
+                                           (abs_ylim_min_dl, abs_ylim_max_dl), **kwargs)
+
+    def plot_experiment_hops(self, src, dst, starting_datetime, ending_datetime, delta, description, ylim, **kwargs):
+        # if the time of the experiment is less than one day, print only the hours
+        import matplotlib.pyplot as plt
+
+        traces = self.traceroutes[src][dst]
+        number_of_box = int((ending_datetime-starting_datetime) / delta)
+
+        # Fixing random state for reproducibility
+        experiment_metadata = self.read_experiment_json(self.path)
+        for instance_desc in experiment_metadata["instances"]:
+            desc = list(instance_desc.values())[0]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == src or ip_priv == src:
+                src_az = desc["availability_zone"]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == dst or ip_priv == dst:
+                dst_az = desc["availability_zone"]
+
+        data = [
+            list(
+                filter(
+                    lambda x:
+                    starting_datetime + (delta * i) <= self.datetime_convertion(x)
+                    < starting_datetime + (delta * (i + 1)), traces
+                )
+            )
+            for i in range(0, number_of_box)
+        ]
+
+        data_delay = [[x["delay"] for x in d] for d in data]
+        data_hop = [[x["hops"] for x in d] for d in data]
+        print([len(x) for x in data])
+        print(data_delay, data_hop)
+        fig, ax = plt.subplots()
+        ax.boxplot(data_hop)
+        ax.tick_params(axis='x', labelrotation=90)
+        plt.xticks(list(range(1, number_of_box + 1)),
+                   [str(starting_datetime + (delta * i)) for i in range(0, number_of_box)])
+        plt.title("HOPS {} -> {}".format(src_az, dst_az))
+        plt.ylim(ylim[0] - 1, ylim[1] + 1)
+        plt.tight_layout()
+        plt.savefig(self.path / "HOPS_{}->{}.pdf".format(src_az, dst_az), bbox_inches="tight")
+
+    def plot_experiment_delay(self, src, dst, starting_datetime, ending_datetime, delta, description, ylim, **kwargs):
+        # if the time of the experiment is less than one day, print only the hours
+        import matplotlib.pyplot as plt
+
+        traces = self.traceroutes[src][dst]
+        number_of_box = int((ending_datetime-starting_datetime) / delta)
+
+        # Fixing random state for reproducibility
+        experiment_metadata = self.read_experiment_json(self.path)
+        for instance_desc in experiment_metadata["instances"]:
+            desc = list(instance_desc.values())[0]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == src or ip_priv == src:
+                src_az = desc["availability_zone"]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == dst or ip_priv == dst:
+                dst_az = desc["availability_zone"]
+
+        data = [
+            list(
+                filter(
+                    lambda x:
+                    starting_datetime + (delta * i) <= self.datetime_convertion(x)
+                    < starting_datetime + (delta * (i + 1)), traces
+                )
+            )
+            for i in range(0, number_of_box)
+        ]
+
+        data_delay = [[x["delay"] for x in d] for d in data]
+        print([len(x) for x in data])
+        print(data_delay, data_delay)
+        fig, ax = plt.subplots()
+        ax.boxplot(data_delay)
+        ax.tick_params(axis='x', labelrotation=90)
+        plt.xticks(list(range(1, number_of_box + 1)),
+                   [str(starting_datetime + (delta * i)) for i in range(0, number_of_box)])
+        plt.title("DELAY {} -> {}".format(src_az, dst_az))
+        plt.ylim(ylim[0], ylim[1])
+        plt.tight_layout()
+        plt.savefig(self.path / "DELAY_{}-{}.pdf".format(src_az, dst_az), bbox_inches="tight")
+
+    @staticmethod
+    def datetime_convertion(trace):
+        trace_date = trace["date"]
+        trace_time = trace["time"]
+        trace_datetime = datetime(year=int(trace_date["year"]), month=int(trace_date["month"]),
+                                  day=int(trace_date["day"]), hour=int(trace_time["hour"]),
+                                  minute=int(trace_time["minute"]), second=int(trace_time["second"]))
+
+        return trace_datetime
 
     @staticmethod
     def check_dates_format(starting_date, ending_date):
@@ -135,12 +253,20 @@ class Plotter(object):
         if not match(regular_expression, ending_time):
             raise ValueError("{} does not match re: {}".format(ending_time, regular_expression))
 
-    def plot_fig(self):
-        pass
+    @staticmethod
+    def read_experiment_json(path):
+        if type(path) is str:
+            path = Path(path)
+        json_path = path / "experiment.json"
+        if not json_path.exists():
+            ValueError("experiments.json do not exists here")
+        with open(Path(json_path), "r") as json_file:
+            dictionary = eval(str(load(json_file)))
+        return dictionary
 
 
 if __name__ == '__main__':
     p = Plotter(path="/Users/giuseppedilena/Desktop/ABEE5D71/")
     p.build_traceroutes()
     # print(p.traceroutes)
-    p.plot("5/10/2020", "5/10/2020", "8:45:00", "8:50:00")
+    p.plot("5/10/2020", "6/10/2020", "8:40:00", "8:40:00", delta=timedelta(hours=1))

@@ -12,10 +12,12 @@ class OneWayTraceroute(object):
         self.traceroute = []
         self.date = None
         self.time = None
+        self.delay = None
+        self.hops = None
 
     def __str__(self):
-        return str({"src": self.source, "dst": self.destination, "traceroute": self.traceroute,
-                    "date": self.date, "time": self.time, "path": self.path})
+        return str({"src": self.source, "dst": self.destination, "traceroute": self.traceroute, "date": self.date,
+                    "time": self.time, "path": self.path, "delay": self.delay, "hops": self.hops})
 
     @staticmethod
     def read_traceroute(file_path):
@@ -45,6 +47,8 @@ class OneWayTraceroute(object):
         self.time = time_
         tr = [self.intervall_conversion(x) for x in tr]
         self.traceroute = tr
+        self.delay = self.get_delay()
+        self.hops = self.number_of_hops()
 
     @staticmethod
     def intervall_conversion(intervall):
