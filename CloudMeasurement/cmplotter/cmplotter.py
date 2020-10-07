@@ -77,16 +77,17 @@ class Plotter(object):
         day, month, year = [int(x) for x in ending_date.split("/")]
         hour, minute, second = [int(x) for x in ending_time.split(":")]
         ending_datetime = datetime(year=year, month=month, day=day, hour=hour, minute=minute, second=second)
-        print(starting_datetime, ending_datetime, ending_datetime-starting_datetime)
+        print(starting_datetime, " -- ", ending_datetime, " -- TOTAL EXP: ", ending_datetime-starting_datetime)
 
         experiment_delta = ending_datetime - starting_datetime
         if experiment_delta.total_seconds() <= 300:
-            ValueError("Please provide an experiment with more than 5 minutes data")
+            raise ValueError("Please provide an experiment with more than 5 minutes data")
 
         r_experiment_delta = experiment_delta % delta
-        if not r_experiment_delta:
-            ValueError("Your delta is not consistent with the starting and ending time,"
-                       " r_experiment_delta={}".format(r_experiment_delta))
+        print(r_experiment_delta)
+        if bool(r_experiment_delta):
+            raise ValueError("Your delta is not consistent with the starting and ending time,"
+                             " r_experiment_delta={}".format(r_experiment_delta))
 
         for src in self.traceroutes.keys():
             for dst in self.traceroutes[src].keys():
@@ -137,6 +138,7 @@ class Plotter(object):
 
         for src in self.traceroutes.keys():
             for dst in self.traceroutes[src].keys():
+                print("* plotting {} -> {}".format(src, dst))
                 self.plot_experiment_hops(src, dst, starting_datetime, ending_datetime, delta, description,
                                           (abs_ylim_min_hop, abs_ylim_max_hop), **kwargs)
                 self.plot_experiment_delay(src, dst, starting_datetime, ending_datetime, delta, description,
@@ -173,8 +175,8 @@ class Plotter(object):
 
         data_delay = [[x["delay"] for x in d] for d in data]
         data_hop = [[x["hops"] for x in d] for d in data]
-        print([len(x) for x in data])
-        print(data_delay, data_hop)
+        # print([len(x) for x in data])
+        # print(data_delay, data_hop)
         fig, ax = plt.subplots()
         ax.boxplot(data_hop)
         ax.tick_params(axis='x', labelrotation=90)
@@ -215,8 +217,8 @@ class Plotter(object):
         ]
 
         data_delay = [[x["delay"] for x in d] for d in data]
-        print([len(x) for x in data])
-        print(data_delay, data_delay)
+        # print([len(x) for x in data])
+        # print(data_delay, data_delay)
         fig, ax = plt.subplots()
         ax.boxplot(data_delay)
         ax.tick_params(axis='x', labelrotation=90)

@@ -23,7 +23,7 @@ from CloudMeasurement.experiments.awsUtils.awsUtils import AWSUtils
 from CloudMeasurement.cmplotter.cmplotter import Plotter
 
 from sqlite3 import OperationalError
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 EXPERIMENTS = {"multiregional": MultiregionalTrace, "regional": RegionalTrace}
@@ -53,14 +53,14 @@ class CloudMeasurementRunner(object):
 
     def parseArgs(self):
 
-        desc = ( "The utility creates experiments  from the\n"
-                 "command line. It can create experiments,\n"
-                 "list them, and manage." )
+        desc = ("The utility creates experiments  from the\n"
+                "command line. It can create experiments,\n"
+                "list them, and manage.")
 
-        usage = ( '%prog [options]\n'
-                  '(type %prog -h for details)' )
+        usage = ('%prog [options]\n'
+                 '(type %prog -h for details)')
 
-        opts = OptionParser(description=desc, usage=usage )
+        opts = OptionParser(description=desc, usage=usage)
         opts.add_option('--create_experiment', '-c', type='string', default=None,
                         help="possible experiments: \n" + "|".join(EXPERIMENTS.keys()))
 
@@ -86,7 +86,7 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--plot_data', type='string', default=None, help='plot the data in the path')
 
-        ######## OPTIONAL ARGS ########
+        # OPTIONAL ARGS
 
         opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
 
@@ -108,7 +108,7 @@ class CloudMeasurementRunner(object):
             opts.print_help()
             exit()
 
-    def begin( self ):
+    def begin(self):
         """ Run the CLI """
         opts = self.options
 
@@ -366,7 +366,7 @@ class CloudMeasurementRunner(object):
                              {instance[0]: {k.lower(): v for k, v in zip(instance_keys, instance)}} for
                              instance in instances]}
 
-            json_path = str(destination_path / experiment_id /"experiment.json")
+            json_path = str(destination_path / experiment_id / "experiment.json")
             save_dict_to_json(json_path=json_path, data_dict=data_dict)
             exit(0)
 
@@ -390,19 +390,44 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.plot_data:
-            path = opts.plot_data
+            reg_exp = r"\S+(\,\d{1,2}\/\d{1,2}\/\d{4}\-\d{1,2}\:\d{1,2}\:\d{1,2}){2},\d+[mhdw]{1}$"
+            if not match(reg_exp, opts.plot_data):
+                raise ValueError("{} do not ft the re: {}".format(opts.plot_data, reg_exp))
+            path, start, stop, delta = opts.plot_data.split(",")
+
             Plotter.check_plot_data(path)
             ip_list = Plotter.get_ip_dir(path)
             for ip in ip_list:
                 Plotter.unzip(Path(path) / ip / "experiment.zip")
-            self.plot_data(path)
+            self.plot_data(path, start, stop, delta)
             exit(0)
 
         print("No operation")
         exit(0)
 
-    def plot_data(self, path):
-        None
+    def plot_data(self, path, start, stop, delta):
+        p = Plotter(path=path)
+        p.build_traceroutes()
+        print("* building the traces...")
+        start_date, start_time = start.split("-")
+        stop_date, stop_time = stop.split("-")
+        tdelta = self.get_delta(delta)
+        p.plot(start_date, stop_date, start_time, stop_time, delta=tdelta)
+
+    @staticmethod
+    def get_delta(delta):
+        c = delta[-1]
+        integer = int(delta[:-1])
+        if c == "m":
+            return timedelta(minutes=integer)
+        if c == "h":
+            return timedelta(hours=integer)
+        if c == "d":
+            return timedelta(days=integer)
+        if c == "w":
+            return timedelta(weeks=integer)
+
+        raise ValueError("delta: '{}' is not valid".format(delta))
 
     def check_save_data_arg(self, args):
         arg = args.split(",")
