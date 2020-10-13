@@ -54,7 +54,7 @@ class MultiregionalTrace(object):
         return mapping
 
     def __get_machine_type_mapping(self, machine_type_mapping):
-        # TODO: check that all the machine type are valid.
+        # TODO: check that all the machine type are valid
         mapping = dict()
         if machine_type_mapping is None:
             mapping = {region: DEFAULT_MACHINE_TYPE for region in self.list_of_regions}
