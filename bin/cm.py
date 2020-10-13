@@ -80,11 +80,11 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--delete_experiment', '-d', type='string', default=None, help='delete experiment')
 
-        opts.add_option('--retrieve_data', type='string', default=None, help='retrieve data')
+        opts.add_option('--retrieve_data', '-R', type='string', default=None, help='retrieve data')
 
-        opts.add_option('--save_data', type='string', default=None, help='save data, EXP_ID,[PATH]')
+        opts.add_option('--save_data', '-S', type='string', default=None, help='save data, EXP_ID,[PATH]')
 
-        opts.add_option('--plot_data', type='string', default=None, help='plot the data in the path')
+        opts.add_option('--plot_data', '-p', type='string', default=None, help='plot the data in the path')
 
         # OPTIONAL ARGS
 
@@ -96,6 +96,9 @@ class CloudMeasurementRunner(object):
                                                                                     ' the machine type mapping')
 
         opts.add_option('--cloud_util', type='string', default="aws", help='retrieve data')
+
+        opts.add_option('--private_ip', default=False, action="store_true", help='use private ips'
+                                                                                 ' for the experiments')
 
         opts.add_option('--key_pair_id', type='string', default="id_rsa", help='public key id')
 
@@ -117,6 +120,7 @@ class CloudMeasurementRunner(object):
         dict_opts.pop("regions")
         dict_opts.pop("cloud_util")
         dict_opts.pop("az_mapping")
+        dict_opts.pop("private_ip")
         dict_opts.pop("machine_type_mapping")
         dict_opts.pop("key_pair_id")
         dict_opts.pop("verbose")
@@ -200,6 +204,7 @@ class CloudMeasurementRunner(object):
             exit(0)
 
         if opts.create_experiment:
+            use_private_ips = opts.private_ip
             list_of_regions = opts.regions
             list_of_regions = list_of_regions.split(",")
             experiments_class = EXPERIMENTS[opts.create_experiment]
@@ -219,14 +224,16 @@ class CloudMeasurementRunner(object):
             cidr_block = experiment_data["cidr_block"]
             creation_date = str(datetime.now())
             self.save_experiment(db_path=DB_PATH, experiment_id=experiment_id, cloud_util=opts.cloud_util,
-                                 experiment_type=opts.create_experiment, peered=0, network_optimized=0,
-                                 creation_date=creation_date, starting_date="None", status="VPCS CONFIGURED",
-                                 ansible_file=str(ansible_file), cidr_block=cidr_block)
+                                 experiment_type=opts.create_experiment, peered=int(use_private_ips),
+                                 network_optimized=0, creation_date=creation_date, starting_date="None",
+                                 status="VPCS CONFIGURED", ansible_file=str(ansible_file), cidr_block=cidr_block)
 
             self.save_regions(db_path=DB_PATH, experiment_data=experiment_data)
 
             print("* CREATING THE INSTANCES {}".format(list_of_regions))
             experiment_data = experiment.create_instances(key_pair_id=opts.key_pair_id)
+            if use_private_ips:
+                experiment.create_peering_connection()
             self.save_instances(db_path=DB_PATH, experiment_data=experiment_data)
             self.save_inventory(ansible_path=ansible_file, experiment_data=experiment_data)
             print("* EXPERIMENT CORRECTLY CREATED! \n "
@@ -272,12 +279,21 @@ class CloudMeasurementRunner(object):
                                                        module_args=mkdir_args, forks=10, cmdline="--become")
 
             print(run)
-
+            using_pair_connections = CloudMeasurementDB.get_peered_value(db_path=DB_PATH, experiment_id=experiment_id)
             instances_data_dict = {row[0]: {key.lower(): val for key, val in zip(data, row)} for row in instances_data}
             for instance in instances_data_dict:
+                ip_type = "public_ip"
+                if using_pair_connections == 1:
+                    ip_type = "private_ip"
                 ip = instances_data_dict[instance]["public_ip"]
-                list_of_destinations = [instances_data_dict[i]["public_ip"] for i in instances_data_dict]
-                list_of_destinations.remove(ip)
+                priv_ip = instances_data_dict[instance]["private_ip"]
+                list_of_destinations = [instances_data_dict[i][ip_type] for i in instances_data_dict]
+
+                if ip in list_of_destinations:
+                    list_of_destinations.remove(ip)
+                if priv_ip in list_of_destinations:
+                    list_of_destinations.remove(priv_ip)
+
                 traceroute_path = "/tmp/traceroute.sh"
                 self.make_traceroute(path=traceroute_path, list_of_destinations=list_of_destinations)
                 copy_args = "src={} dest={} mode=777".format(traceroute_path, TRACEROUTE_SCRIPT_PATH)

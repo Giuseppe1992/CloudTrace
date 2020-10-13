@@ -77,6 +77,8 @@ class OneWayTraceroute(object):
     def get_delay(self):
         last_hop_delays = self.traceroute[-1][2:]
         last_hop_delays = list(filter(lambda x: x is not None, last_hop_delays))
+        if len(last_hop_delays) == 0:
+            return None
         return sum(last_hop_delays)/len(last_hop_delays)
 
     def to_dict(self):

@@ -208,6 +208,16 @@ class CloudMeasurementDB(object):
         return rows[0][0]
 
     @staticmethod
+    def get_peered_value(experiment_id, db_path):
+        conn = sqlite3.connect(str(db_path))
+        c = conn.cursor()
+        c.execute('''SELECT PEERED FROM EXPERIMENTS WHERE EXPERIMENT_ID='{}' '''.format(experiment_id))
+        rows = c.fetchall()
+        if not rows:
+            return None
+        return int(rows[0][0])
+
+    @staticmethod
     def get_instances_data(experiment_id, db_path, db_columns):
         conn = sqlite3.connect(str(db_path))
         c = conn.cursor()

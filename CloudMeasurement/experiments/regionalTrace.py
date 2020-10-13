@@ -11,7 +11,7 @@ REMOTE_USER = "ubuntu"
 
 class RegionalTrace(MultiregionalTrace):
     def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None, machine_type_mapping=None,
-                 cloud_util=AWSUtils, vpc_peering=False, network_optimized=False):
+                 cloud_util=AWSUtils, network_optimized=False):
         """
         A regional Trace is a particular case fo the Multiregional,
         :param region: region
@@ -22,12 +22,11 @@ class RegionalTrace(MultiregionalTrace):
             raise ValueError("for Regional Trace you have to pass just one Region")
         super(RegionalTrace, self).__init__(list_of_regions=list_of_regions, az_mapping=az_mapping,
                                             machine_type_mapping=machine_type_mapping, cloud_util=cloud_util,
-                                            vpc_peering=vpc_peering, network_optimized=network_optimized)
+                                            network_optimized=network_optimized)
 
         # Overrides the previus az_mapping with the new function
         self.az_mapping = self.__get_az_mapping(az_mapping=az_mapping)
         # self.machine_type_mapping = self.__get_machine_type_mapping(machine_type_mapping=machine_type_mapping)
-        self.vpc_peering = vpc_peering
         self.network_optimized = network_optimized
 
     def __get_az_mapping(self, az_mapping):
@@ -103,15 +102,15 @@ class RegionalTrace(MultiregionalTrace):
                               "availability_zone": self.az_mapping[region],
                               "public_subnet": public_subnet_ids}]
 
-        if self.vpc_peering:
-            self.enable_vpc_peering(vpcs_data)
-
         if self.network_optimized:
             self.enable_network_optimized()
 
         self.vpcs_data = vpcs_data
 
         return vpcs_data
+
+    def create_peering_connection(self):
+        pass
 
     def create_instances(self, key_pair_id="id_rsa"):
         # TODO check that key_pair exists in all the regions

@@ -13,10 +13,19 @@ class Plotter(object):
             self.path = Path(path)
         self.check_plot_data(self.path)
         self.all_ips = self.get_all_ips(path)
+        self.private_ip_mapping = self.get_private_ip_mapping(path)
         self.traceroutes = self.build_traceroutes()
 
     def get_all_ips(self, path):
         return self.get_ip_dir(path)
+
+    def get_private_ip_mapping(self, path):
+        mapping = {}
+        description = self.read_experiment_json(path)
+        for instance in description["instances"]:
+            instance_data = list(instance.values())[0]
+            mapping[instance_data["private_ip"]] = instance_data["public_ip"]
+        return mapping
 
     @staticmethod
     def unzip(zip_file):
@@ -45,7 +54,6 @@ class Plotter(object):
 
     def build_traceroutes(self):
         path = self.path
-
         traceroutes = dict()
         for src in self.all_ips:
             traceroutes[src] = dict()
@@ -55,12 +63,16 @@ class Plotter(object):
                 file_name = file.name
                 dst_ip = file_name.split("date_")[0].replace("_", ".")[3:]
                 if dst_ip not in dsts:
-                    raise ValueError("filename: {} not good for the destinations: {}".format(file_name, dsts))
+                    if self.private_ip_mapping[dst_ip] not in dsts:
+                        raise ValueError("filename: {} not good for the destinations: {}".format(file_name, dsts))
 
                 if dst_ip not in traceroutes[src].keys():
                     traceroutes[src][dst_ip] = []
                 tr = OneWayTraceroute(src, dst_ip, file)
                 tr.build_traceroute()
+                # TODO: CHECK CORRECTNESS
+                if tr.delay is None:
+                    continue
                 traceroutes[src][dst_ip].append(tr.to_dict())
 
         return traceroutes
@@ -268,7 +280,7 @@ class Plotter(object):
 
 
 if __name__ == '__main__':
-    p = Plotter(path="/Users/giuseppedilena/Desktop/ABEE5D71/")
+    p = Plotter(path="/Users/giuseppedilena/Desktop/BE49F7F3/")
     p.build_traceroutes()
     # print(p.traceroutes)
-    p.plot("5/10/2020", "6/10/2020", "8:40:00", "8:40:00", delta=timedelta(hours=1))
+    p.plot("13/10/2020", "13/10/2020", "8:03:00", "8:15:00", delta=timedelta(minutes=1))

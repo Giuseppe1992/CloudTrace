@@ -1,5 +1,6 @@
 from CloudMeasurement.experiments.awsUtils import AWSUtils
 from multiprocessing import Process
+from itertools import combinations
 
 import ipaddress
 
@@ -11,7 +12,7 @@ REMOTE_USER = "ubuntu"
 
 class MultiregionalTrace(object):
     def __init__(self, list_of_regions=("eu-central-1",), az_mapping=None, machine_type_mapping=None,
-                 cloud_util=AWSUtils, vpc_peering=False, network_optimized=False):
+                 cloud_util=AWSUtils, network_optimized=False):
         """
         :param list_of_regions: list of regions
         :param az_mapping: dict
@@ -32,7 +33,6 @@ class MultiregionalTrace(object):
 
         self.az_mapping = self.__get_az_mapping(az_mapping=az_mapping)
         self.machine_type_mapping = self.__get_machine_type_mapping(machine_type_mapping=machine_type_mapping)
-        self.vpc_peering = vpc_peering
         self.network_optimized = network_optimized
 
     def __get_az_mapping(self, az_mapping):
@@ -118,9 +118,6 @@ class MultiregionalTrace(object):
                                   "availability_zone": [az],
                                   "public_subnet": [public_subnet_id]}]
 
-        if self.vpc_peering:
-            self.enable_vpc_peering(vpcs_data)
-
         if self.network_optimized:
             self.enable_network_optimized()
 
@@ -128,8 +125,15 @@ class MultiregionalTrace(object):
 
         return vpcs_data
 
-    def enable_vpc_peering(self):
-        pass
+    def create_peering_connection(self):
+        vpcs_data = self.vpcs_data
+        list_of_regions = self.list_of_regions
+        print("* Peering the connections, we will use private Ips for the experiment")
+        for requester, acceptor in combinations(list_of_regions, 2):
+            vpc_id_req = vpcs_data[requester][0]['vpc_id']
+            vpc_id_acc = vpcs_data[acceptor][0]['vpc_id']
+            self.cloud_utils.create_vpc_peering(region=requester, vpc_id=vpc_id_req,
+                                                peer_region=acceptor, peer_vpc_id=vpc_id_acc)
 
     def create_instances(self, key_pair_id="id_rsa"):
         # TODO check that key_pair exists in all the regions

@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 import uuid
 from time import sleep
 
@@ -44,6 +45,49 @@ class AWSUtils(object):
     def get_route_table_ids_in_the_region(region):
         ec2_resource = boto3.resource('ec2', region_name=region)
         return [rt.id for rt in list(ec2_resource.route_tables.iterator())]
+
+    @staticmethod
+    def create_vpc_peering(region, vpc_id, peer_region, peer_vpc_id):
+        AWSUtils.check_if_region_exists(region=region)
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        peer_request = ec2_resource.create_vpc_peering_connection(PeerVpcId=peer_vpc_id,
+                                                                  PeerRegion=peer_region,
+                                                                  VpcId=vpc_id)
+        request_id = peer_request.id
+        vpc_requester = ec2_resource.Vpc(id=vpc_id)
+        AWSUtils.check_if_region_exists(region=peer_region)
+
+        ec2_resource = boto3.resource('ec2', region_name=peer_region)
+        vpc_accepter = ec2_resource.Vpc(id=peer_vpc_id)
+        peer_request = None
+        for t in range(10):
+            try:
+                peer_request = list(ec2_resource.vpc_peering_connections.filter(
+                    VpcPeeringConnectionIds=[request_id]))
+                break
+            except ClientError:
+                print("ClientError on try: {} {}".format(t, request_id))
+                sleep(0.5)
+
+        if not peer_request:
+            raise IndexError("the peer request is empty: {}".format(request_id))
+        peer_request = peer_request[0]
+        if peer_request.status["Code"] != "pending-acceptance":
+            raise ValueError("status code for peering request {} - {} is {}".format(region,
+                                                                                    peer_region,
+                                                                                    peer_request.status["Code"]))
+        response = peer_request.accept()
+
+        route_table_requester = list(vpc_requester.route_tables.all())[0].id
+        route_table_accepter = list(vpc_accepter.route_tables.all())[0].id
+        if vpc_requester != vpc_accepter:
+            subnet_accepter = vpc_accepter.cidr_block
+            subnet_requester = vpc_requester.cidr_block
+            AWSUtils.add_peer_route(region=region, route_table_id=route_table_requester, peer_id=request_id,
+                                    destination_cidr_block=subnet_accepter)
+            AWSUtils.add_peer_route(region=peer_region, route_table_id=route_table_accepter, peer_id=request_id,
+                                    destination_cidr_block=subnet_requester)
+        return response
 
     @staticmethod
     def get_all_regions(region="eu-central-1"):
@@ -213,6 +257,24 @@ class AWSUtils(object):
         ec2_resource = boto3.resource('ec2', region_name=region)
         route_table = ec2_resource.RouteTable(route_table_id)
         route = route_table.create_route(GatewayId=gateway_id, DestinationCidrBlock=destination_cidr_block, **kwargs)
+        return route
+
+    @staticmethod
+    def add_peer_route(region, route_table_id, peer_id, destination_cidr_block, **kwargs):
+        """
+        Add new route in the route table
+        :param region: region
+        :param route_table_id: RouteTable Object
+        :param peer_id: VpcPeeringConnectionId to add in the route
+        :param destination_cidr_block: Ip subnet to route. "0.0.0.0/0" for all the traffic
+        :param kwargs: Optional parameters that you can assign to the route
+        :return: Route Object
+        """
+        AWSUtils.check_if_route_table_id_exists_in_region(route_table_id=route_table_id, region=region)
+        ec2_resource = boto3.resource('ec2', region_name=region)
+        route_table = ec2_resource.RouteTable(route_table_id)
+        route = route_table.create_route(VpcPeeringConnectionId=peer_id,
+                                         DestinationCidrBlock=destination_cidr_block, **kwargs)
         return route
 
     @staticmethod
@@ -549,4 +611,6 @@ class AWSUtils(object):
 
 
 if __name__ == '__main__':
-    t = AWSUtils()
+    # t = AWSUtils()
+    AWSUtils.create_vpc_peering(region="eu-west-1", peer_vpc_id="vpc-0233250a138d717e6",
+                                peer_region="eu-west-2", vpc_id="vpc-0e5394562c0d218c5")
