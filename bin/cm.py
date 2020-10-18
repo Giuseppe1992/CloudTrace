@@ -104,6 +104,9 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--verbose', '-v', default=None, action='store_true', help='Shows more details')
 
+        opts.add_option('--interactive', '-I', default=None, type='string', help='Use interactive Dash'
+                                                                                 ' with .pickle file')
+
         self.options, self.args = opts.parse_args()
 
         # We don't accept extra arguments after the options
@@ -416,6 +419,14 @@ class CloudMeasurementRunner(object):
             for ip in ip_list:
                 Plotter.unzip(Path(path) / ip / "experiment.zip")
             self.plot_data(path, start, stop, delta)
+            exit(0)
+
+        if opts.interactive:
+            path = Path(opts.interactive)
+            if not path.exists():
+                print("ERROR: file {} does not exists".format(path))
+                exit(1)
+            Plotter.show_interactive(path)
             exit(0)
 
         print("No operation")

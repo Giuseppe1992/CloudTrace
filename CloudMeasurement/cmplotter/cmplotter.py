@@ -1,8 +1,13 @@
+import pickle
+
 from pathlib import Path
 from os import system
 from re import match
 from datetime import datetime, timedelta
 from json import load
+from numpy import mean
+from statistics import stdev
+import plotly.graph_objects as go
 
 from CloudMeasurement.cmplotter.extract_data import OneWayTraceroute
 
@@ -15,6 +20,13 @@ class Plotter(object):
         self.all_ips = self.get_all_ips(path)
         self.private_ip_mapping = self.get_private_ip_mapping(path)
         self.traceroutes = self.build_traceroutes()
+        self.filtered_data = None
+        self.coord = {"eu-central-1a": (50.110924, 8.682127), "eu-central-1b": (50.120924, 8.692127),
+                      "eu-central-1c": (50.100924, 8.672127),
+                      "eu-west-1a": (51.509865, -0.118092), "eu-west-1b": (51.519865, -0.108092),
+                      "eu-west-1c": (51.499865, -0.128092),
+                      "eu-west-2a": (53.350140, -6.266155), "eu-west-2b": (53.360140, -6.256155),
+                      "eu-west-2c": (53.340140, -6.276155)}
 
     def get_all_ips(self, path):
         return self.get_ip_dir(path)
@@ -78,7 +90,7 @@ class Plotter(object):
         return traceroutes
 
     def plot(self, starting_date, ending_date, starting_time, ending_time, delta=timedelta(hours=1),
-             description=None, **kwargs):
+             description=None, ylim=None, **kwargs):
         self.check_dates_format(starting_date, ending_date)
         self.check_time_format(starting_time, ending_time)
 
@@ -126,28 +138,32 @@ class Plotter(object):
 
         abs_ylim_min_dl, abs_ylim_max_dl, abs_ylim_min_hop, abs_ylim_max_hop = 1000, 0, 1000, 0
 
-        for src in self.traceroutes.keys():
-            for dst in self.traceroutes[src].keys():
-                ylim_min_dl = min(self.traceroutes[src][dst], key=lambda x: x["delay"])
-                ylim_min_dl = ylim_min_dl["delay"]
-                if abs_ylim_min_dl > ylim_min_dl:
-                    abs_ylim_min_dl = ylim_min_dl
+        if ylim is None:
+            for src in self.traceroutes.keys():
+                for dst in self.traceroutes[src].keys():
+                    ylim_min_dl = min(self.traceroutes[src][dst], key=lambda x: x["delay"])
+                    ylim_min_dl = ylim_min_dl["delay"]
+                    if abs_ylim_min_dl > ylim_min_dl:
+                        abs_ylim_min_dl = ylim_min_dl
 
-                ylim_max_dl = max(self.traceroutes[src][dst], key=lambda x: x["delay"])
-                ylim_max_dl = ylim_max_dl["delay"]
-                if abs_ylim_max_dl < ylim_max_dl:
-                    abs_ylim_max_dl = ylim_max_dl
+                    ylim_max_dl = max(self.traceroutes[src][dst], key=lambda x: x["delay"])
+                    ylim_max_dl = ylim_max_dl["delay"]
+                    if abs_ylim_max_dl < ylim_max_dl:
+                        abs_ylim_max_dl = ylim_max_dl
 
-                ylim_min_hop = min(self.traceroutes[src][dst], key=lambda x: x["hops"])
-                ylim_min_hop = ylim_min_hop["hops"]
-                if abs_ylim_min_hop > ylim_min_hop:
-                    abs_ylim_min_hop = ylim_min_hop
+                    ylim_min_hop = min(self.traceroutes[src][dst], key=lambda x: x["hops"])
+                    ylim_min_hop = ylim_min_hop["hops"]
+                    if abs_ylim_min_hop > ylim_min_hop:
+                        abs_ylim_min_hop = ylim_min_hop
 
-                ylim_max_hop = max(self.traceroutes[src][dst], key=lambda x: x["hops"])
-                ylim_max_hop = ylim_max_hop["hops"]
-                if abs_ylim_max_hop < ylim_max_hop:
-                    abs_ylim_max_hop = ylim_max_hop
+                    ylim_max_hop = max(self.traceroutes[src][dst], key=lambda x: x["hops"])
+                    ylim_max_hop = ylim_max_hop["hops"]
+                    if abs_ylim_max_hop < ylim_max_hop:
+                        abs_ylim_max_hop = ylim_max_hop
+        else:
+            abs_ylim_min_dl, abs_ylim_max_hop = 0, int(ylim)
 
+        self.filter_data(starting_datetime, ending_datetime, delta)
         for src in self.traceroutes.keys():
             for dst in self.traceroutes[src].keys():
                 print("* plotting {} -> {}".format(src, dst))
@@ -156,11 +172,14 @@ class Plotter(object):
                 self.plot_experiment_delay(src, dst, starting_datetime, ending_datetime, delta, description,
                                            (abs_ylim_min_dl, abs_ylim_max_dl), **kwargs)
 
+        self.create_confidence_interval_table(starting_datetime, ending_datetime, delta, measure="delay")
+        self.create_confidence_interval_table(starting_datetime, ending_datetime, delta, measure="hops")
+        self.create_interactive_map(measure="hops")
+        self.create_interactive_map(measure="delay")
+
     def plot_experiment_hops(self, src, dst, starting_datetime, ending_datetime, delta, description, ylim, **kwargs):
         # if the time of the experiment is less than one day, print only the hours
         import matplotlib.pyplot as plt
-
-        traces = self.traceroutes[src][dst]
         number_of_box = int((ending_datetime-starting_datetime) / delta)
 
         # Fixing random state for reproducibility
@@ -174,18 +193,7 @@ class Plotter(object):
             if ip_pub == dst or ip_priv == dst:
                 dst_az = desc["availability_zone"]
 
-        data = [
-            list(
-                filter(
-                    lambda x:
-                    starting_datetime + (delta * i) <= self.datetime_convertion(x)
-                    < starting_datetime + (delta * (i + 1)), traces
-                )
-            )
-            for i in range(0, number_of_box)
-        ]
-
-        data_delay = [[x["delay"] for x in d] for d in data]
+        data = self.filtered_data[src][dst]
         data_hop = [[x["hops"] for x in d] for d in data]
         # print([len(x) for x in data])
         # print(data_delay, data_hop)
@@ -202,8 +210,6 @@ class Plotter(object):
     def plot_experiment_delay(self, src, dst, starting_datetime, ending_datetime, delta, description, ylim, **kwargs):
         # if the time of the experiment is less than one day, print only the hours
         import matplotlib.pyplot as plt
-
-        traces = self.traceroutes[src][dst]
         number_of_box = int((ending_datetime-starting_datetime) / delta)
 
         # Fixing random state for reproducibility
@@ -217,16 +223,7 @@ class Plotter(object):
             if ip_pub == dst or ip_priv == dst:
                 dst_az = desc["availability_zone"]
 
-        data = [
-            list(
-                filter(
-                    lambda x:
-                    starting_datetime + (delta * i) <= self.datetime_convertion(x)
-                    < starting_datetime + (delta * (i + 1)), traces
-                )
-            )
-            for i in range(0, number_of_box)
-        ]
+        data = self.filtered_data[src][dst]
 
         data_delay = [[x["delay"] for x in d] for d in data]
         # print([len(x) for x in data])
@@ -240,6 +237,189 @@ class Plotter(object):
         plt.ylim(ylim[0], ylim[1])
         plt.tight_layout()
         plt.savefig(self.path / "DELAY_{}-{}.pdf".format(src_az, dst_az), bbox_inches="tight")
+
+    def create_confidence_interval_table(self, starting_datetime, ending_datetime, delta, measure="delay"):
+        import matplotlib.pyplot as plt
+
+        confidence_interval = dict()
+        for src in self.filtered_data.keys():
+            for dst in self.filtered_data[src].keys():
+                data = self.filtered_data[src][dst]
+                for interval in data:
+                    # confidence interval formula
+                    delays = [x[measure] for x in interval]
+                    ci = (mean(delays), stdev(delays))
+                    s, d = self.get_az(src, dst)
+                    if s not in confidence_interval.keys():
+                        confidence_interval[s] = dict()
+                    if d not in confidence_interval[s].keys():
+                        confidence_interval[s][d] = []
+
+                    confidence_interval[s][d].append(ci)
+
+        fig, ax = plt.subplots()
+
+        # hide axes
+        fig.patch.set_visible(False)
+        ax.axis('off')
+        ax.axis('tight')
+        row = [str(starting_datetime + (delta*x)) for x in range(int((ending_datetime-starting_datetime)/delta))]
+        columns_unsorted = [(s, d) for s in confidence_interval.keys() for d in confidence_interval[s].keys()]
+        columns = []
+        for s, d in columns_unsorted:
+            if (s, d) not in columns:
+                columns.append((s, d))
+                columns.append((d, s))
+
+        values = [[(round(confidence_interval[s][d][i][0], 2), "+-", round(confidence_interval[s][d][i][1], 2))
+                   for s, d in columns] for i in range(len(row))]
+
+        ax.table(rowLabels=row, cellText=values, colLabels=columns, loc='center')
+        fig.tight_layout()
+        plt.text(10, 80, ax.table, size=50)
+        plt.savefig(self.path / "{}_standard_deviation.pdf".format(measure))
+        return values
+
+    def create_interactive_map(self, measure="delay"):
+        colors = ["red", "blue", "black", "orange", "yellow", "green"]
+        confidence_interval = dict()
+        for src in self.filtered_data.keys():
+            for dst in self.filtered_data[src].keys():
+                data = self.filtered_data[src][dst]
+                united_measure = [x[measure] for li in data for x in li]
+                ci = (mean(united_measure), stdev(united_measure))
+                s, d = self.get_az(src, dst)
+                if s not in confidence_interval.keys():
+                    confidence_interval[s] = dict()
+                if d not in confidence_interval[s].keys():
+                    confidence_interval[s][d] = None
+
+                confidence_interval[s][d] = ci
+
+        fig = go.Figure()
+        src_dst_list = [(s, d) for s in confidence_interval.keys() for d in confidence_interval[s].keys()]
+
+        first_group = []
+        second_group = []
+        for s, d in src_dst_list:
+            if (s, d) not in first_group and (s, d) not in second_group:
+                first_group.append((s, d))
+                second_group.append((d, s))
+
+        for e, (s, d) in enumerate(first_group):
+            slat, slon = self.get_az_coord(s)
+            dlat, dlon = self.get_az_coord(d)
+            fig.add_trace(go.Scattergeo(
+                lat=[slat, dlat],
+                lon=[slon, dlon],
+                mode='lines+markers',
+                line=dict(width=2, color=colors[e % len(colors)]),
+                name="{}->{} {}".format(s, d, confidence_interval[s][d])
+
+            ))
+
+            fig.update_layout(title_text='MAP',
+                              height=700, width=900,
+                              margin={"t": 0, "b": 0, "l": 0, "r": 0, "pad": 0},
+                              showlegend=True, geo_scope="world")
+
+        pickle.dump(fig, open(str(self.path / "{}1.pickle".format(measure)), "wb"))
+        fig.write_image(str(self.path / "{}1.pdf".format(measure)))
+
+        fig = go.Figure()
+        for e, (s, d) in enumerate(second_group):
+            slat, slon = self.get_az_coord(s)
+            dlat, dlon = self.get_az_coord(d)
+            fig.add_trace(go.Scattergeo(
+                lat=[slat, dlat],
+                lon=[slon, dlon],
+                mode='lines+markers',
+                line=dict(width=2, color=colors[e % len(colors)]),
+                name="{}->{} {}".format(s, d, confidence_interval[s][d])
+
+            ))
+
+            fig.update_layout(title_text='MAP',
+                              height=700, width=900,
+                              margin={"t": 0, "b": 0, "l": 0, "r": 0, "pad": 0},
+                              showlegend=True, geo_scope="world")
+
+        pickle.dump(fig, open(str(self.path / "{}2.pickle".format(measure)), "wb"))
+        fig.write_image(str(self.path / "{}2.pdf".format(measure)))
+
+        fig = go.Figure()
+        for e, (s, d) in enumerate(src_dst_list):
+            slat, slon = self.get_az_coord(s)
+            dlat, dlon = self.get_az_coord(d)
+            fig.add_trace(go.Scattergeo(
+                lat=[slat, dlat],
+                lon=[slon, dlon],
+                mode='lines+markers',
+                line=dict(width=2, color=colors[e % len(colors)]),
+                name="{}->{} {}".format(s, d, confidence_interval[s][d])
+
+            ))
+
+            fig.update_layout(title_text='MAP',
+                              height=700, width=900,
+                              margin={"t": 0, "b": 0, "l": 0, "r": 0, "pad": 0},
+                              showlegend=True, geo_scope="world")
+
+        pickle.dump(fig, open(str(self.path / "{}_total.pickle".format(measure)), "wb"))
+        fig.write_image(str(self.path / "{}_total.pdf".format(measure)))
+
+    @staticmethod
+    def show_interactive(file):
+        import dash
+        import dash_core_components as dcc
+        import dash_html_components as html
+
+        fig = pickle.load(open(file, "rb"))
+
+        app = dash.Dash()
+        app.layout = html.Div([
+            dcc.Graph(figure=fig)
+        ])
+
+        app.run_server(debug=True, use_reloader=False)  # Turn off reloader if inside Jupyter
+
+    def get_az_coord(self, az):
+        return self.coord[az]
+
+    def filter_data(self, starting_datetime, ending_datetime, delta):
+        # if the time of the experiment is less than one day, print only the hours
+        self.filtered_data = {x: dict() for x in self.traceroutes.keys()}
+
+        for src in self.traceroutes.keys():
+            for dst in self.traceroutes[src].keys():
+                traces = self.traceroutes[src][dst]
+                number_of_box = int((ending_datetime-starting_datetime) / delta)
+                # Fixing random state for reproducibility
+                data = [
+                    list(
+                        filter(
+                            lambda x:
+                            starting_datetime + (delta * i) <= self.datetime_convertion(x)
+                            < starting_datetime + (delta * (i + 1)), traces
+                        )
+                    )
+                    for i in range(0, number_of_box)
+                ]
+                self.filtered_data[src][dst] = data
+        return self.filtered_data
+
+    def get_az(self, src, dst):
+        experiment_metadata = self.read_experiment_json(self.path)
+        for instance_desc in experiment_metadata["instances"]:
+            desc = list(instance_desc.values())[0]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == src or ip_priv == src:
+                src_az = desc["availability_zone"]
+            ip_pub, ip_priv = desc["public_ip"], desc["private_ip"]
+            if ip_pub == dst or ip_priv == dst:
+                dst_az = desc["availability_zone"]
+
+        return src_az, dst_az
 
     @staticmethod
     def datetime_convertion(trace):
@@ -283,4 +463,5 @@ if __name__ == '__main__':
     p = Plotter(path="/Users/giuseppedilena/Desktop/BE49F7F3/")
     p.build_traceroutes()
     # print(p.traceroutes)
-    p.plot("13/10/2020", "13/10/2020", "8:03:00", "8:15:00", delta=timedelta(minutes=1))
+    p.plot("13/10/2020", "14/10/2020", "8:30:00", "8:30:00", delta=timedelta(hours=1))
+    p.show_interactive("delay_total.pickle")
