@@ -21,8 +21,8 @@ class Plotter(object):
         self.private_ip_mapping = self.get_private_ip_mapping(path)
         self.traceroutes = self.build_traceroutes()
         self.filtered_data = None
-        self.coord = {"eu-central-1a": (50.110924, 8.682127), "eu-central-1b": (50.120924, 8.692127),
-                      "eu-central-1c": (50.100924, 8.672127),
+        self.coord = {"eu-central-1a": (50.110924, 8.682127), "eu-central-1b": (50.220924, 8.792127),
+                      "eu-central-1c": (50.220924, 8.572127),
                       "eu-west-1a": (51.509865, -0.118092), "eu-west-1b": (51.519865, -0.108092),
                       "eu-west-1c": (51.499865, -0.128092),
                       "eu-west-2a": (53.350140, -6.266155), "eu-west-2b": (53.360140, -6.256155),

@@ -86,6 +86,10 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--plot_data', '-p', type='string', default=None, help='plot the data in the path')
 
+        opts.add_option('--src_ports', default='33434-33435', type='string', help='src ports')
+
+        opts.add_option('--dst_ports', default='33434-33435', type='string', help='dst ports')
+
         # OPTIONAL ARGS
 
         opts.add_option('--regions', type='string', default="eu-central-1", help='list of region to use')
@@ -106,6 +110,8 @@ class CloudMeasurementRunner(object):
 
         opts.add_option('--interactive', '-I', default=None, type='string', help='Use interactive Dash'
                                                                                  ' with .pickle file')
+
+
 
         self.options, self.args = opts.parse_args()
 
@@ -298,7 +304,10 @@ class CloudMeasurementRunner(object):
                     list_of_destinations.remove(priv_ip)
 
                 traceroute_path = "/tmp/traceroute.sh"
-                self.make_traceroute(path=traceroute_path, list_of_destinations=list_of_destinations)
+                src_ports = opts.src_ports
+                dst_ports = opts.dst_ports
+                self.make_traceroute(path=traceroute_path, list_of_destinations=list_of_destinations,
+                                     src_ports=src_ports, dst_ports=dst_ports)
                 copy_args = "src={} dest={} mode=777".format(traceroute_path, TRACEROUTE_SCRIPT_PATH)
                 run = InventoryConfiguration.run_inventory(ansible_file, host_pattern=ip, module="copy",
                                                            module_args=copy_args, forks=1, cmdline="--become")
@@ -534,16 +543,21 @@ class CloudMeasurementRunner(object):
         inventory_configuration.make_inventory()
 
     @staticmethod
-    def make_traceroute(path, list_of_destinations):
+    def make_traceroute(path, list_of_destinations, src_ports, dst_ports):
+        src_start, src_end = [int(i) for i in src_ports.split("-")]
+        dst_start, dst_end = [int(i) for i in dst_ports.split("-")]
         tr_string = '''#!/bin/bash \n'''
         for ip in list_of_destinations:
             ip_name = "ip_" + ip + "date_"
             ip_name = ip_name.replace(".", "_")
-            tr_string += 'sudo paris-traceroute -n -p 33434 -U -m 60 {} |' \
+            for src_port in range(src_start, src_end):
+                for dst_port in range(dst_start, dst_end):
+                    tr_string += 'sudo paris-traceroute -n -s {} -p {} -U -m 60 {} |' \
                          ' tee {}$(date +"%M_%k_%d_%m_%Y" |' \
                          ' tr -d \' \').log > {}$(date +"%M_%k_%d_%m_%Y" |' \
-                         ' tr -d \' \').log \n'.format(ip, EXPERIMENT_REMOTE_DIR / ip_name,
-                                                       EXPERIMENT_BK_REMOTE_DIR / ip_name)
+                         ' tr -d \' \')_s{}_p{}.log \n'.format(src_port, dst_port, ip,
+                                                       EXPERIMENT_REMOTE_DIR / ip_name,
+                                                       EXPERIMENT_BK_REMOTE_DIR / ip_name, src_port, dst_port)
 
         with open(path, "w") as f:
             f.write(tr_string)

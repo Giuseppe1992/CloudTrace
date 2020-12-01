@@ -39,6 +39,8 @@ pyasn1==0.4.8
 pycodestyle==2.6.0
 pycparser==2.20
 pyparsing==2.4.7
+pyqt5==5.12.0
+pyqtwebengine==5.12.0
 pytest==6.1.1
 pytest-cov==2.10.1
 python-daemon==2.2.4
